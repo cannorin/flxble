@@ -1,0 +1,29 @@
+---
+  type  = "default"
+  title = "Tags"
+---
+
+<main id="content" class="content" role="main">
+  <article class="post">
+      <header class="post-header">
+        <h1 class="post-title">Tags</h1>
+      </header>
+      <section class="post-content">
+        <p>
+          {{ first = true }}
+          {{ for tag in tags }}
+            {{ if !first }}
+              ,
+            {{ end }}
+            {{ first = false }}
+            {{ if config.tag != null }}
+              <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
+            {{ else }}
+              <span class="tag-name">{{ tag }}</span>
+            {{ end }}
+          {{ end }}
+        </p>
+      </section>
+  </article>
+</main>
+

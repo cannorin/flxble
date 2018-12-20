@@ -1,0 +1,43 @@
+{{
+  if page | object.has_key "title"
+    title = page.title + " - " + config.title
+  else if archive | object.has_key "title"
+    title = archive.title + " - " + config.title
+  else
+    title = config.title
+  end
+
+  if page | object.has_key "description"
+    description = page.description
+  else
+    description = config.description
+  end
+}}
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>
+    {{ title }}
+  </title>
+  <meta name="description" content="{{ html.escape description }}" />
+</head>
+
+<body class="{{template.body_class}}">
+  <header class="default-header">
+    <a href="{{config.base_url}}/index.html">Home</a>
+    {{ if config.tag != null }}
+      &nbsp;
+      <a href="{{config.base_url}}/{{config.tag}}/index.html">Tags</a>
+    {{ end }}
+    {{ if config.archive != null }}
+      &nbsp;
+      <a href="{{config.base_url}}/{{config.archive}}/index.html">Archive</a>
+    {{ end }}
+  </header>
+  {{content}}
+
+</body>
+
+</html>

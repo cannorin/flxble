@@ -1,0 +1,33 @@
+---
+  type  = "default"
+  title = "Archive"
+---
+
+<main id="content" class="content" role="main">
+  <article class="post">
+      <header class="post-header">
+        <h1 class="post-title">Archive</h1>
+      </header>
+      <section class="post-content">
+        <p>
+          {{ first = true }}
+          {{ for month in months }}
+            {{ if !first }}
+              ,
+            {{ end }}
+            {{ first = false }}
+            {{ if config.archive != null }}
+              <span class="post-date">
+              <a href="{{config.base_url}}/{{config.archive}}/{{month.year}}-{{month.month}}.html">
+                {{date.to_string month "%b %Y"}}
+              </a>
+              </span>
+            {{ else }}
+              {{date.to_string month "%b %Y"}}
+            {{ end }}
+          {{ end }}
+        </p>
+      </section>
+  </article>
+</main>
+

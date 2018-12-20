@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>netcoreapp2.2; net472</TargetFrameworks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.2' " />
+  <ItemGroup>
+    <ProjectReference Include="..\Flxble.Toml\Flxble.Toml.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../prelude.fs" />
+    <Compile Include="Logger.fs" />
+    <Compile Include="TemplateEngineFacade.fs" />
+    <Compile Include="Configuration.fs" />
+    <Compile Include="Models.fs" />
+    <Compile Include="Context.fs" />
+    <Compile Include="Render.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.CommandLine" Version="2.2.6831.16169" />
+    <PackageReference Include="Markdig" Version="0.15.5" />
+    <PackageReference Include="Scriban" Version="1.2.7" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,63 @@
+---
+  type = "default"
+  body_class = "post-template"
+---
+
+<main class="content" role="main">
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">{{page.title}}</h1>
+      <section class="post-meta">
+        {{ if page | object.has_key "date" }}
+        <time class="post-date" datetime="{{page.date}}">
+          {{ if config.archive != null }}
+            <a href="{{config.base_url}}/{{config.archive}}/{{page.date.year}}-{{page.date.month}}.html">
+              {{date.to_string page.date "%d %b %Y"}}
+            </a>
+          {{ else }}
+              {{date.to_string page.date "%d %b %Y"}}
+          {{ end }}
+        </time>
+        &nbsp;
+        {{ end }}
+        <span class="post-tags">
+          Tags:
+          {{ for tag in page.tags }}
+            {{ if config.tag != null }}
+              <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
+            {{ else }}
+              <span class="tag-name">{{ tag }}</span>
+            {{ end }}
+          {{ end }}
+        </span>
+      </section>
+    </header>
+
+    <section class="post-content">
+      {{ content }}
+    </section>
+
+    <footer class="post-footer">
+      <section class="prev-next-date-page">
+        {{ if prev_date_page != null }}
+        <a href="{{config.base_url}}/{{prev_date_page.location}}">
+          {{ prev_date_page.title }}
+        </a>
+        {{ end }}
+        {{ if next_date_page != null }}
+        <a href="{{config.base_url}}/{{next_date_page.location}}">
+          {{ next_date_page.title }}
+        </a>
+        {{ end }}
+      </section>
+      <section class="share">
+        <h4>Share this post</h4>
+        {{ title = html.url_encode page.title }}
+        <a class="icon-twitter" href="https://twitter.con/intent/tweet?text={{title}} - "
+           onclick="window.open(this.href+' '+window.location.href, 'twitter-share', 'width=550,height=235');return false;">
+          <span class="share-twitter">Twitter</span>
+        </a>
+      </section>
+    </footer>
+  </article>
+</main>

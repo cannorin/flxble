@@ -1,0 +1,30 @@
+# Required
+base_url = '/home/alice/codes/flxble/testblog/output'
+title = "flxble"
+theme = "minimal"
+
+# Optional, will be empty by default
+subtitle = "Fast Lightweight eXtensible BLog Engine"
+description = '''
+"flxble" stands for Fast Lightweight eXtensible BLog Engine.
+It's written in F#, and powered by Markdig markdown processor
+and scriban template engine.'''
+
+# Optional, will be this value by default
+lang    = "en-us"
+source  = "src"     # directory to find source files
+output  = "output"  # directory to output processed files
+content = "content" # files in this directory will be copied directly to ./${output}/
+themes  = "themes"  # directory to find themes
+
+# Optional, disabled by default
+tag     = "tag"     # tag archives will be generated to
+                     # ./${output}/${tag}/${tag-name}.html
+archive = "archive" # monthly archives will be generated to
+                     # ./${output}/${archive}/${yyyy}-${mm}.html
+cache   = ".cache"  # directory to store caches for skipping unchanged documents
+
+## Markdown config (optional) 
+markdown = "advanced"  # set this "advanced" to enable popular extensions
+markdown_extra_rules = "extra_rules"
+                       # put your custom rule definitions here

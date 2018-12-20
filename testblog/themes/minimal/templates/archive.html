@@ -1,0 +1,54 @@
+---
+  type = "default"
+  body_class = "tag-archive"
+---
+
+<main id="content" class="content" role="main">
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">{{ archive.title }}</h1>
+    </header>
+    {{ for page in archive.pages }}
+      {{ if page | object.has_key "title" }}
+        <article class="post">
+          <header class="post-header">
+            <h1 class="post-title">
+              <a href="{{config.base_url}}/{{page.location}}">
+                {{page.title}}
+              </a>
+            </h1>
+          </header>
+          {{ if page.description != null }}
+          <section class="post-excerpt">
+            {{ page.description }}
+          </section>
+          {{ end }}
+          <footer class="post-meta">
+            {{ if page | object.has_key "date" }}
+            <time class="post-date" datetime="{{page.date}}">
+              {{ if config.archive != null }}
+                <a href="{{config.base_url}}/{{config.archive}}/{{page.date.year}}-{{page.date.month}}.html">
+                  {{date.to_string page.date "%d %b %Y"}}
+                </a>
+              {{ else }}
+                  {{date.to_string page.date "%d %b %Y"}}
+              {{ end }}
+              &nbsp;
+            </time>
+            {{ end }}
+            <span class="post-tags">
+              Tags:
+              {{ for tag in page.tags }}
+                {{ if config.tag != null }}
+                  <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
+                {{ else }}
+                  <span class="tag-name">{{ tag }}</span>
+                {{ end }}
+              {{ end }}
+            </span>
+          </footer>
+        </article>
+      {{ end }}
+    {{ end }}
+  </article>
+</main>

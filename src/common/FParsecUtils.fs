@@ -19,6 +19,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 *)
 
+/// This file depends on https://github.com/cannorin/prelude.fs/blob/master/prelude.fs
+
 /// Useful extensions for FParsec
 module FParsecUtils
 open System
@@ -30,11 +32,9 @@ type BacktrackParsecBuilder =
   member inline __.Bind (m, f) = m >>=? f
   member inline __.Return x = preturn x
   member inline __.ReturnFrom x = x
-  member inline __.Yield x = preturn x
-  member inline __.YieldFrom x = x
   member inline __.Combine (x, y) = attempt x <|> y
-  member inline __.For (xs, f) = xs |> Seq.map (f >> attempt) |> choice
-  member inline __.Zero() = pzero
+  member inline __.Delay f = f()
+  member inline __.Zero () = pzero
 
 /// Parsec computation expression builder
 [<Struct>]
@@ -42,12 +42,25 @@ type ParsecBuilder =
   member inline __.Bind (m, f) = m >>= f
   member inline __.Return x = preturn x
   member inline __.ReturnFrom x = x
-  member inline __.Yield x = preturn x
-  member inline __.YieldFrom x = x
   member inline __.Combine (x, y) = x <|> y
-  member inline __.For (xs, f) = xs |> Seq.map f |> choice
-  member inline __.Zero() = pzero
+  member inline __.Delay f = f()
+  member inline __.Zero () = pzero
+
   member inline __.backtrack = BacktrackParsecBuilder()
+
+/// Represents a location in the source.
+[<Struct>]
+type SourceLocation = 
+  {
+    fileName: string
+    startPos: FParsec.Position
+    endPos:   FParsec.Position
+  }
+  override this.ToString() =
+    sprintf "%s, Ln %i/Col %i"
+            this.fileName
+            this.startPos.Line
+            this.startPos.Column
 
 /// Parsec computation expression
 let parsec = ParsecBuilder()
@@ -65,11 +78,20 @@ let inline cyn c = skipChar c
 let inline ws x = x .>>? spaces
 
 /// Applies the `parser` for `n` times.
-let rec times n parser =
-  if n <= 0 then invalidArg "n" "n must be positive"
-  else if n = 1 then parser |>> List.singleton
+let inline times n parser = parray n parser |>> List.ofArray
+
+/// Applies the `parser` up to `n` times.
+let rec upto n parser =
+  if n > 0 then
+    (attempt parser .>>.? upto (n-1) parser |>> List.Cons)
+    <|> preturn []
   else
-    parser .>>.? (times (n-1) parser) |>> fun (h, t) -> h :: t
+    preturn[]
+
+/// Applies the `parser` at lease once and up to `n` times.
+let rec upto1 n parser =
+  if n > 0 then parser .>>. upto1 (n-1) parser |>> List.Cons
+  else preturn []
 
 /// Given a sequence of `(key, value)`, parses the string `key`
 /// and returns the corresponding `value`.
@@ -140,6 +162,16 @@ let inline passert (cond: 'a -> bool) (parser: Parser<'a, _>) =
   parser >>= fun x ->
     if cond x then preturn x else fun _ -> Reply(FatalError, NoErrorMessages)
 
+/// Appends the location in the source file to a parser.
+let inline location parser =
+  let inline rawStream stream = Reply(stream)
+  rawStream .>>. getPosition .>>. parser .>>. getPosition
+    |>> fun (((rst, startpos), x), endpos) ->
+      (x, {
+        fileName=rst.Name;
+        startPos=startpos;
+        endPos=endpos
+      })
 
 /// ISO8601-compliant Date/Time Parser.
 /// See https://tools.ietf.org/html/iso8601#section-5.6 for details.

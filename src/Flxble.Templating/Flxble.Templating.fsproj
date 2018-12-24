@@ -1,19 +1,18 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Include="Library.fs" />
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Flxble.Toml\Flxble.Toml.fsproj" />
   </ItemGroup>
-
+  <ItemGroup>
+    <Compile Include="../common/prelude.fs" />
+    <Compile Include="../common/FParsecUtils.fs" />
+    <Compile Include="DataTypeExtra.fs" />
+    <Compile Include="Script.fs" />
+    <Compile Include="Builtin.fs" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.0.3" />
   </ItemGroup>
-
 </Project>

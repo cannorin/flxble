@@ -5,8 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../prelude.fs" />
-    <Compile Include="FParsecUtils.fs" />
+    <Compile Include="../common/prelude.fs" />
+    <Compile Include="../common/FParsecUtils.fs" />
     <Compile Include="Toml.fs" />
   </ItemGroup>
 

@@ -8,9 +8,8 @@
     <ProjectReference Include="..\Flxble.Toml\Flxble.Toml.fsproj" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="../prelude.fs" />
+    <Compile Include="../common/prelude.fs" />
     <Compile Include="Logger.fs" />
-    <Compile Include="TemplateEngineFacade.fs" />
     <Compile Include="Configuration.fs" />
     <Compile Include="Models.fs" />
     <Compile Include="Context.fs" />

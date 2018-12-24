@@ -39,7 +39,7 @@ type StructuralFunction<'a, 'b> =
     let hashcode = Guid.NewGuid()
     StructuralFunction(f, hashcode)
   
-  member inline this.AsString = this.str
+  member this.AsString = this.str
   member inline this.Invoke x = this.invoke x
   override this.ToString() = this.AsString
   override x.Equals yo =

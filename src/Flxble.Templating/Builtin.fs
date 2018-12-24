@@ -97,6 +97,23 @@ let inline private s1 g name ty =
 let inline private s2 g name ty =      
   name, fn 2 (function [String a; String b] -> g a b |> ty | xs -> err 2 name xs)
 
+let inline private cast f name ty =
+  name, fn 1 (function [x] -> f x |> ty | xs -> err 1 name xs)
+
+let inline private removelike f name =
+  name, fn 3 (function
+    | [Int s; Int e; String t] -> f s e t |> String
+    | xs -> err 3 name xs
+      )
+let inline private padby f name =
+  name, fn 3 (function
+    | [Int count; String chars; String s] ->
+      chars |> String.toChars |> Seq.fold (fun state c -> f count c state) s |> String
+    | xs -> err 3 name xs
+      )
+let inline private takelike f name =
+  name, fn 2 (function [Int len; String s] -> f len s |> String | xs -> err 2 name xs)
+
 let inline private defaultBindings (culture: CultureInfo) =
   Map.ofSeq <| seq {
     // comparison
@@ -190,8 +207,6 @@ let inline private defaultBindings (culture: CultureInfo) =
       "root"
 
     // type & casting
-    let inline cast f name ty =
-      name, fn 1 (function [x] -> f x |> ty | xs -> err 1 name xs)
     yield cast (toStr culture) "string" String
     yield cast toInt "int" Int
     yield cast toFloat "float" Float
@@ -344,13 +359,8 @@ let inline private defaultBindings (culture: CultureInfo) =
       yield s2 String.contains "contains" Bool
       yield s2 String.endsWith "ends_with" Bool
       
-      let inline f g name =
-        name, fn 2 (function
-          | [String q; String s] -> g q s |> Int
-          | xs -> err 2 name xs
-        )
-      yield f String.findIndex "find_index"
-      yield f String.findLastIndex "find_last_index"
+      yield s2 String.findIndex "find_index" Int
+      yield s2 String.findLastIndex "find_last_index" Int
 
       yield "insert_at", fn 3 (function
         | [String a; Int index;  String s] ->
@@ -359,27 +369,17 @@ let inline private defaultBindings (culture: CultureInfo) =
       )
       yield "length", fn 1 (function [String s] -> String.length s |> Int | xs -> err 1 "length" xs)
       yield s1 (String.normalize None) "normalize" String
-      let inline padby f name =
-        name, fn 3 (function
-          | [Int count; String chars; String s] ->
-            chars |> String.toChars |> Seq.fold (fun state c -> f count c state) s |> String
-          | xs -> err 3 name xs
-        )
+
       yield padby String.padLeftBy "pad_left"
       yield padby String.padRightBy "pad_right"
-      let inline removelike f name =
-        name, fn 3 (function
-          | [Int s; Int e; String t] -> f s e t |> String
-          | xs -> err 3 name xs
-        )
+      
       yield removelike String.remove "remove"
       yield "replace", fn 3 (function
         | [String q; String r; String s] -> String.replace q r s |> String
         | xs -> err 3 "replace" xs
       )
       yield "rev", fn 1 (function [String s] -> String.rev s |> String | xs -> err 1 "rev" xs)
-      let inline takelike f name =
-        name, fn 2 (function [Int len; String s] -> f len s |> String | xs -> err 2 name xs)
+      
       yield takelike String.skip "skip"
       yield "split", fn 2 (function
         | [String sep; String s] -> String.split sep s |> Seq.map String |> Array
@@ -389,24 +389,18 @@ let inline private defaultBindings (culture: CultureInfo) =
       yield s2 String.startsWith "starts_with" Bool
       yield removelike String.substring "substring"
       yield takelike String.take "take"
-      let inline lowerlike f name =
-        name, fn 1 (function [String s] -> f culture s |> String | xs -> err 1 name xs)
-      yield lowerlike String.toLower "to_lower"
+
+      yield s1 (String.toLower culture) "to_lower" String
       yield s1 String.toLowerInvariant "to_lower_invariant" String
-      yield lowerlike String.toUpper "to_upper"
+      yield s1 (String.toUpper culture) "to_upper" String
       yield s1 String.toUpperInvariant "to_upper_invariant" String
       yield s1 String.trim "trim" String
       yield s1 String.trimStart "trim_start" String
       yield s1 String.trimEnd "trim_end" String
-      let inline trimBy f name =
-        name, fn 2 (function
-          | [String chars; String s] ->
-            f (chars |> String.toChars) s |> String
-          | xs -> err 2 name xs
-        )
-      yield trimBy String.trimBySeq "trim_by"
-      yield trimBy String.trimStartBySeq "trim_start_by"
-      yield trimBy String.trimEndBySeq "trim_end_by"
+
+      yield s2 String.trimBySeq "trim_by" String
+      yield s2 String.trimStartBySeq "trim_start_by" String
+      yield s2 String.trimEndBySeq "trim_end_by" String
       
       yield s1 String.IsNullOrEmpty "is_empty" Bool
       yield s1 String.IsNullOrWhiteSpace "is_whitespace" Bool
@@ -443,7 +437,7 @@ let inline private defaultBindings (culture: CultureInfo) =
   }
 
 module ScriptContext =
-  let inline create culture commentize =
+  let create culture commentize =
     {
       bindings = defaultBindings culture
       culture = culture

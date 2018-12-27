@@ -11,6 +11,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Flxble.Toml", "src\Flxble.T
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Flxble.Templating", "src\Flxble.Templating\Flxble.Templating.fsproj", "{92F4B4BA-E82C-491F-9906-5CF19FC1EFB6}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "tests", "tests\tests.fsproj", "{56255505-4A85-4C09-841B-BDC0A9E0BF1A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,6 +62,18 @@ Global
 		{92F4B4BA-E82C-491F-9906-5CF19FC1EFB6}.Release|x64.Build.0 = Release|Any CPU
 		{92F4B4BA-E82C-491F-9906-5CF19FC1EFB6}.Release|x86.ActiveCfg = Release|Any CPU
 		{92F4B4BA-E82C-491F-9906-5CF19FC1EFB6}.Release|x86.Build.0 = Release|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Debug|x64.Build.0 = Debug|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Debug|x86.Build.0 = Debug|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Release|x64.ActiveCfg = Release|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Release|x64.Build.0 = Release|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Release|x86.ActiveCfg = Release|Any CPU
+		{56255505-4A85-4C09-841B-BDC0A9E0BF1A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{09C4B067-8BD0-490B-BEEE-EA9C420C4AFF} = {EB323DCB-CEAF-45EC-BF05-3E4F057CB012}

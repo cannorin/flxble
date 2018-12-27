@@ -1,59 +1,56 @@
-[<AutoOpen>]
-module Flxble.Templating.Builtin
-
+module internal Flxble.Templating.Builtin
 open System
 open System.Globalization
 
 open DataTypeExtra
-open Flxble.Templating
-open Script
+open SyntaxTree
 
-let inline private fn i f =
+let inline fn i f =
   Function (i, StructuralFunction (Seq.toList >> f))
 
-let inline private fnlazy i f =
+let inline fnlazy i f =
   Function (i, StructuralFunction f)
 
-let inline private record m =
+let inline record m =
   Record (m |> Map.ofSeq)
 
-let inline private err i name (objs: ScriptObject seq) =
+let inline err i name (objs: ScriptObject seq) =
   let objs = objs |> Seq.cache
   if i = Seq.length objs then
     sprintf "the function '%s' does not support type(s) %s"
-      name (objs |> Seq.map (sprintf "'%A'") |> String.concat ", ")
+      name (objs |> Seq.map (fun x -> x.ObjectType |> sprintf "'%A'") |> String.concat ", ")
     |> EValue |> Null
   else
     sprintf "the function '%s' takes %i argument(s) but given %i"
       name i (Seq.length objs)
     |> EValue |> Null
 
-let inline private toBool obj =
+let inline toBool obj =
   match obj with
     | Bool false | Null _ -> false | _ -> true
 
-let inline private toInt obj =
+let inline toInt obj =
   match obj with
     | Int i -> i
     | Float i -> int i
     | String s -> int s
     | _ -> 0
 
-let inline private toFloat obj =
+let inline toFloat obj =
   match obj with
     | Int i -> float i
     | Float i -> i
     | String s -> float s
     | _ -> 0.0
 
-let inline private toArr obj =
+let inline toArr obj =
   match obj with
     | Array xs -> xs | _ -> Seq.empty
 
-let inline private toStr culture (obj: ScriptObject) =
+let inline toStr culture (obj: ScriptObject) =
   obj.AsCulturalString culture id
 
-let inline private toFmtBox culture obj =
+let inline toFmtBox culture obj =
   match obj with
     | Bool b -> box b
     | Int i -> box i
@@ -73,7 +70,7 @@ type ScriptObjectCompare =
   | CmpString of s:string
   | CmpNull
 
-let inline private toCompare obj =
+let inline toCompare obj =
   match obj with
     | Int i -> CmpInt i
     | Float f -> CmpFloat f
@@ -83,38 +80,38 @@ let inline private toCompare obj =
     | String s -> CmpString s
     | _ -> CmpNull
 
-let inline private math2 i f name =
+let inline math2 i f name =
   name, fn 2 (function
     | [Int a; Int b] -> i a b |> Int
     | [Float a; Float b] -> f a b |> Float
     | xs -> err 2 name xs
   )
 
-let inline private cmp g name =
+let inline cmp g name =
   name, fn 2 (function [a;b] -> g (toCompare a) (toCompare b) |> Bool | xs -> err 2 name xs)
-let inline private s1 g name ty =
+let inline s1 g name ty =
   name, fn 1 (function [String s] -> g s |> ty | xs -> err 1 name xs)
-let inline private s2 g name ty =      
+let inline s2 g name ty =      
   name, fn 2 (function [String a; String b] -> g a b |> ty | xs -> err 2 name xs)
 
-let inline private cast f name ty =
+let inline cast f name ty =
   name, fn 1 (function [x] -> f x |> ty | xs -> err 1 name xs)
 
-let inline private removelike f name =
+let inline removelike f name =
   name, fn 3 (function
     | [Int s; Int e; String t] -> f s e t |> String
     | xs -> err 3 name xs
       )
-let inline private padby f name =
+let inline padby f name =
   name, fn 3 (function
     | [Int count; String chars; String s] ->
       chars |> String.toChars |> Seq.fold (fun state c -> f count c state) s |> String
     | xs -> err 3 name xs
       )
-let inline private takelike f name =
+let inline takelike f name =
   name, fn 2 (function [Int len; String s] -> f len s |> String | xs -> err 2 name xs)
 
-let inline private defaultBindings (culture: CultureInfo) =
+let inline defaultBindings (culture: CultureInfo) =
   Map.ofSeq <| seq {
     // comparison
     yield "=",  fn 2 (function [a;b] -> a = b |> Bool | xs -> err 2 "=" xs)
@@ -208,14 +205,15 @@ let inline private defaultBindings (culture: CultureInfo) =
 
     // type & casting
     yield cast (toStr culture) "string" String
+    yield cast (toStr CultureInfo.InvariantCulture) "string_invariant" String
     yield cast toInt "int" Int
     yield cast toFloat "float" Float
     yield cast (fun x -> to_s x.ObjectType) "typeof" String
 
     // function
     yield "id", fn 1 (function [x] -> x | xs -> err 1 "id" xs)
-    yield "|>", fn 2 (function [a;b] -> a.Invoke [b] | xs -> err 2 "|>" xs)
-    yield "<|", fn 2 (function [a;b] -> b.Invoke [a] | xs -> err 2 "<|" xs)
+    yield "|>", fn 2 (function [a;b] -> b.Invoke [a] | xs -> err 2 "|>" xs)
+    yield "<|", fn 2 (function [a;b] -> a.Invoke [b] | xs -> err 2 "<|" xs)
     yield "||>", fn 2 (function [a; Array xs] -> a.Invoke xs | xs -> err 2 "||>" xs)
     yield "<||", fn 2 (function [Array xs; a] -> a.Invoke xs | xs -> err 2 "<||" xs)
     yield ">>", fn 2 (function
@@ -274,6 +272,12 @@ let inline private defaultBindings (culture: CultureInfo) =
           d.ToString(fmt, culture.DateTimeFormat) |> String
         | xs -> err 2 "to_string" xs
       )
+      // https://docs.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings
+      yield "to_string_invariant", fn 2 (function
+        | [String fmt; Date d] ->
+          d.ToString(fmt, CultureInfo.InvariantCulture.DateTimeFormat) |> String
+        | xs -> err 2 "to_string_invariant" xs
+      )
       yield "parse", fn 1 (function
         | [String s] -> DateTime.Parse(s, culture.DateTimeFormat) |> Date
         | xs -> err 1 "parse" xs
@@ -307,6 +311,21 @@ let inline private defaultBindings (culture: CultureInfo) =
         | [f; s; Array xs] ->
           xs |> Seq.fold (fun s x -> f.Invoke [s; x]) s
         | xs -> err 3 "fold" xs
+      )
+      yield "forall", fn 2 (function
+        | [p; Array xs] ->
+          xs |> Seq.forall (Seq.singleton >> p.Invoke >> toBool) |> Bool
+        | xs -> err 2 "forall" xs
+      )
+      yield "exists", fn 2 (function
+        | [p; Array xs] ->
+          xs |> Seq.exists (Seq.singleton >> p.Invoke >> toBool) |> Bool
+        | xs -> err 2 "exists" xs
+      )
+      yield "is_empty", fn 1 (function
+        | [Array xs] ->
+          xs |> Seq.isEmpty |> Bool
+        | xs -> err 1 "is_empty" xs
       )
       yield "find", fn 2 (function
         | [p; Array xs] ->
@@ -355,6 +374,11 @@ let inline private defaultBindings (culture: CultureInfo) =
         | [String s; Array xs] ->
           xs |> Seq.map (toStr culture) |> String.concat s |> String
         | xs -> err 2 "concat" xs
+      )
+      yield "concat_invariant", fn 2 (function
+        | [String s; Array xs] ->
+          xs |> Seq.map (toStr CultureInfo.InvariantCulture) |> String.concat s |> String
+        | xs -> err 2 "concat_invariant" xs
       )
       yield s2 String.contains "contains" Bool
       yield s2 String.endsWith "ends_with" Bool
@@ -411,6 +435,11 @@ let inline private defaultBindings (culture: CultureInfo) =
           String.Format(fmt, xs |> Seq.map (toFmtBox culture) |> Seq.toArray) |> String
         | xs -> err 2 "format" xs
       )
+      yield "format_invariant", fn 2 (function
+        | [String fmt; Array xs] ->
+          String.Format(fmt, xs |> Seq.map (toFmtBox CultureInfo.InvariantCulture) |> Seq.toArray) |> String
+        | xs -> err 2 "format_invariant" xs
+      )
 
       yield s1 Uri.EscapeUriString "url_escape" String
       yield s1 Uri.EscapeDataString "url_encode" String
@@ -434,12 +463,12 @@ let inline private defaultBindings (culture: CultureInfo) =
         | xs -> err 2 "has_key" xs
       )
     }
-  }
 
-module ScriptContext =
-  let create culture commentize =
-    {
-      bindings = defaultBindings culture
-      culture = culture
-      commentize = commentize
+    // debug module
+    yield "debug", record <| seq {
+      yield "print", fn 1 (function
+        | [x] -> printf "%A" x; Null ENull
+        | xs -> err 1 "print" xs
+      )
     }
+  }

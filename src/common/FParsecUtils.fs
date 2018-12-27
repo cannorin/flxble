@@ -26,28 +26,6 @@ module FParsecUtils
 open System
 open FParsec
 
-/// Parsec computation expression builder with backtrack
-[<Struct>]
-type BacktrackParsecBuilder =
-  member inline __.Bind (m, f) = m >>=? f
-  member inline __.Return x = preturn x
-  member inline __.ReturnFrom x = x
-  member inline __.Combine (x, y) = attempt x <|> y
-  member inline __.Delay f = f()
-  member inline __.Zero () = pzero
-
-/// Parsec computation expression builder
-[<Struct>]
-type ParsecBuilder =
-  member inline __.Bind (m, f) = m >>= f
-  member inline __.Return x = preturn x
-  member inline __.ReturnFrom x = x
-  member inline __.Combine (x, y) = x <|> y
-  member inline __.Delay f = f()
-  member inline __.Zero () = pzero
-
-  member inline __.backtrack = BacktrackParsecBuilder()
-
 /// Represents a location in the source.
 [<Struct>]
 type SourceLocation = 
@@ -61,9 +39,12 @@ type SourceLocation =
             this.fileName
             this.startPos.Line
             this.startPos.Column
-
-/// Parsec computation expression
-let parsec = ParsecBuilder()
+  static member inline (+) (x: SourceLocation, y: SourceLocation) =
+    {
+      fileName = x.fileName
+      startPos = min x.startPos y.startPos
+      endPos   = max x.endPos   y.endPos
+    }
 
 /// Variant of `<|>` but accept different types of parsers and returns `Choice<'a, 'b>`.
 let inline (<||>) a b = (a |>> Choice1Of2) <|> (b |>> Choice2Of2)
@@ -74,8 +55,51 @@ let inline syn s = skipString s
 /// short hand for `skipChar c `
 let inline cyn c = skipChar c
 
-/// short hand for `x .>>? spaces`
-let inline ws x = x .>>? spaces
+/// skips over any sequence of zero or more whitespaces but not newline.
+let inline whitespaces<'a> : Parser<unit, 'a> =
+  skipManySatisfy (fun c -> c = ' ' || c = '\t') <?> "whitespace"
+
+/// skips over any sequence of one or more whitespaces but not newline.
+let inline whitespaces1<'a> : Parser<unit, 'a> =
+  skipMany1SatisfyL (fun c -> c = ' ' || c = '\t') "whitespace"
+
+type ISpaceCombinatorsProvider<'a> =
+  abstract member spaces:  Parser<unit, 'a>
+  abstract member spaces1: Parser<unit, 'a>
+  abstract member ws:      Parser<'b, 'a> -> Parser<'b, 'a>
+
+/// skips over any sequence of whitespaces or newline.
+[<Struct>]
+type DefaultSpaceCombinators<'a> =
+  interface ISpaceCombinatorsProvider<'a> with
+    member __.spaces    = spaces
+    member __.spaces1   = spaces1
+    member __.ws parser = parser .>> spaces
+
+/// skips over any sequence of whitespaces but not newline.
+[<Struct>]
+type InlineSpaceCombinators<'a> =
+  interface ISpaceCombinatorsProvider<'a> with
+    member __.spaces    = whitespaces
+    member __.spaces1   = whitespaces1
+    member __.ws parser = parser .>> whitespaces
+
+let inline private lineSplicingSpace() =
+  skipSatisfy (fun c -> c = ' ' || c = '\t') <|> (cyn '\\' >>. skipNewline)
+
+/// skips over any sequence of whitespaces or backslash-newline ( "\\\\\n" ).
+[<Struct>]
+type LineSplicingSpaceCombinators<'a> =
+  interface ISpaceCombinatorsProvider<'a> with
+    member __.spaces =
+      skipMany <| lineSplicingSpace()
+    member __.spaces1 =
+      skipMany1 <| lineSplicingSpace()
+    member __.ws parser =
+      parser .>> skipMany (lineSplicingSpace())
+
+/// short hand for `x .>> spaces`
+let inline ws x = x .>> spaces
 
 /// Applies the `parser` for `n` times.
 let inline times n parser = parray n parser |>> List.ofArray
@@ -83,7 +107,7 @@ let inline times n parser = parray n parser |>> List.ofArray
 /// Applies the `parser` up to `n` times.
 let rec upto n parser =
   if n > 0 then
-    (attempt parser .>>.? upto (n-1) parser |>> List.Cons)
+    (attempt parser .>>. upto (n-1) parser |>> List.Cons)
     <|> preturn []
   else
     preturn[]
@@ -172,6 +196,41 @@ let inline location parser =
         startPos=startpos;
         endPos=endpos
       })
+
+/// applies the `parser` to the rest of the line.
+let inline tillNewline (parser: Parser<_, _>) : Parser<_, _> =
+  fun stream ->
+    let stateAtBegin = stream.State
+    stream.SkipRestOfLine false
+    use substream = stream.CreateSubstream<_>(stateAtBegin)
+    let result = parser substream
+    let shouleBeTrue = stream.SkipNewline()
+    assert shouleBeTrue
+    result
+
+let inline embeddedBlock
+    (beginDelim: string)
+    (endDelim: string)
+    (insideParser: Parser<_, _>)
+    : Parser<_, _> =
+  let expectedEmbeddedBlock = expected <| sprintf "%s ... %s" beginDelim endDelim
+  fun stream ->
+    if stream.Skip(beginDelim) then
+      let stateAtBegin = stream.State
+      let mutable foundString = false
+      let maxChars = System.Int32.MaxValue
+      stream.SkipCharsOrNewlinesUntilString(endDelim, maxChars, &foundString)
+      |> ignore
+      if foundString then
+        use substream = stream.CreateSubstream<_>(stateAtBegin)
+        let result = insideParser substream
+        let shouleBeTrue = stream.Skip(endDelim)
+        assert shouleBeTrue
+        result
+      else
+        Reply(Error, expectedString endDelim)
+    else
+      Reply(Error, expectedEmbeddedBlock)
 
 /// ISO8601-compliant Date/Time Parser.
 /// See https://tools.ietf.org/html/iso8601#section-5.6 for details.

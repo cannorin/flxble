@@ -9,8 +9,11 @@
     <Compile Include="../common/prelude.fs" />
     <Compile Include="../common/FParsecUtils.fs" />
     <Compile Include="DataTypeExtra.fs" />
-    <Compile Include="Script.fs" />
+    <Compile Include="SyntaxTree.fs" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="Context.fs" />
     <Compile Include="Builtin.fs" />
+    <Compile Include="Template.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.0.3" />

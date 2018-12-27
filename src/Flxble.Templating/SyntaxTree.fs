@@ -1,12 +1,7 @@
-module Flxble.Templating.Script
-
+module Flxble.Templating.SyntaxTree
 open System
-open System.Globalization
-
 open DataTypeExtra
 open FParsecUtils
-
-open System.Text
 
 [<RequireQualifiedAccess; StructuredFormatDisplay("{AsString}"); Struct>]
 type ScriptObjectType =
@@ -30,8 +25,12 @@ type ScriptObject =
   | Array   of ScriptObject seq
   | Record  of Map<string, ScriptObject>
   | Function of argLength: int * StructuralFunction<ScriptObject seq, ScriptObject>
+  /// Null value. Can also contain an error message as `EValue errorMessage`.
   | Null of errorMessage:EqualityNull<string>
   with
+    /// Converts the script object to a string with the given `culture`.
+    /// Null value with an error message will be quoted using `commentize`.
+    /// An array, a record, or a function cannot be printed with this function.
     member this.AsCulturalString (culture: System.Globalization.CultureInfo) commentize =
       match this with
         | Bool b -> sprintf "%b" b
@@ -48,6 +47,7 @@ type ScriptObject =
         | Null (EValue msg) -> commentize msg
         | Null ENull -> ""
 
+    /// Gets the type of the script object.
     member this.ObjectType =
       match this with
         | Bool _ -> ScriptObjectType.Bool
@@ -61,8 +61,12 @@ type ScriptObject =
         | Function _ -> ScriptObjectType.Function
         | Null _ -> ScriptObjectType.Null
     
+    /// Determines if the script object is `Null`.
     member this.IsScriptNull = this.ObjectType = ScriptObjectType.Null
     
+    /// Gets a value of the given field `name` of the script object.
+    /// If it is not a record or does not have the filed,
+    /// `Null` with the corresponding error message will be returned.
     member this.Item name =
       match this with
         | Record d ->
@@ -91,6 +95,9 @@ type ScriptObject =
         | Null _ -> this
         | _ -> Null (EqualityNull "not a record")
 
+    /// Gets a value at the given `index` of the script object.
+    /// If it is not an array or the index is out of range,
+    /// `Null` with the corresponding error message will be returned.
     member this.Item index =  
       match this with
         | Array xs ->
@@ -106,10 +113,14 @@ type ScriptObject =
         | Null _ -> this
         | _ -> Null (EqualityNull "not an array")
 
+    /// Applies the script object to the given `args`.
+    /// If it is not a function or raised an error,
+    /// `Null` with the corresponding error message will be returned.
     member this.Invoke args =
       let rec apply args func =
         let arglen = Seq.length args
         match func with
+          | v when arglen = 0 -> v
           | Function (i, f) ->
             if i <= arglen then
               let args' = args |> Seq.take i
@@ -120,57 +131,58 @@ type ScriptObject =
               let f xs =
                 f.invoke (Seq.append args xs)
               Function (i', StructuralFunction f)
-          | Null (EValue _) as e -> e
-          | v when arglen = 0 -> v
+          | Null (EValue _) -> func
           | _ -> Null (EqualityNull "not a function")
       apply args this
 
-and [<Struct>] ScriptInfo = {
+and [<Struct; StructuredFormatDisplay("{AsString}")>] ScriptInfo = {
   location: SourceLocation
-}
+} with
+  member this.AsString = to_s this.location
+  override this.ToString() = this.AsString
 
 and ScriptExprWithInfo = With<ScriptInfo, ScriptExpr>
 
 and ScriptExpr =
   | Literal of ScriptObject
   | Variable of string
+  | Let of string * ScriptExprWithInfo * ScriptExprWithInfo
   | Lambda of string list * ScriptExprWithInfo
   | ArrayNew of ScriptExprWithInfo list
   | RecordNew of (string * ScriptExprWithInfo) list
   | RecordWith of orig:ScriptExprWithInfo * (string * ScriptExprWithInfo) list
   | MemberAccess of string * ScriptExprWithInfo
-  | IndexerAccess of int * ScriptExprWithInfo
+  | IndexerAccess of index:ScriptExprWithInfo * ScriptExprWithInfo
+  | If of cond:ScriptExprWithInfo * ScriptExprWithInfo * ScriptExprWithInfo
   | Application of func:ScriptExprWithInfo * args:ScriptExprWithInfo list
 
 type ScriptStatement =
+  /// %%open EXPR
   | Open of ScriptExprWithInfo
+  /// %%def NAME = EXPR
   | Define of string * ScriptExprWithInfo
+  /// %%begin
+  /// ...
+  /// %%end
   | Block of Script
-  | If of cond:ScriptExprWithInfo * Script * Script
+  /// %%when CONDITION do
+  /// ...
+  /// \[%%otherwise
+  /// ...\]
+  /// %%end
+  | When of cond:ScriptExprWithInfo * exec:Script * otherwise:Script option
+  /// %%for NAME in EXPR do
+  /// ...
+  /// %%end
   | For of variable:string * ScriptExprWithInfo * Script
+  /// {{ EXPR }}
   | YieldObject of ScriptExprWithInfo
+  /// ANY_OTHER_STRING
   | YieldText of string
 
 and Script = ScriptStatement list
 
-type ScriptContext = {
-  bindings: Map<string, ScriptObject>
-  /// will be used to format datetimes
-  culture: CultureInfo
-  /// function to print an error message as a comment
-  /// in the target language.
-  /// for HTML, this should be something like
-  /// `sprintf "<!-- %s -->"`.
-  commentize: string -> string
-}
-
-module ScriptContext =
-  let inline tryFind key ctx = ctx.bindings |> Map.tryFind key
-  let inline add key value ctx = { ctx with bindings = ctx.bindings |> Map.add key value }
-
 module ScriptExpr =
-  module Ctx = ScriptContext
-
   let inline private error info format =
     Printf.kprintf (fun s ->
       let msg =
@@ -180,115 +192,72 @@ module ScriptExpr =
       Null (EqualityNull msg)
     ) format
 
-  let rec eval ctx expr =
+  /// Evaluates the given `expr` to a `ScripeObject` with the `context`.
+  /// If there was an error, `Null (EValue errorMessage)` will be returned.
+  let rec eval context expr =
     match expr.item with
       | Literal l -> l
       | Variable v ->
-        ctx |> Ctx.tryFind v
+        context |> Map.tryFind v
         ?| error expr.info "the variable '%s' does not exist" v
       | Lambda (vars, body) ->
         let f xs =
-          let bindings =
+          let ctx =
             Seq.zip vars xs
-            |> Seq.fold (fun state (k, v) -> state |> Map.add k v) ctx.bindings
-          body |> eval { ctx with bindings = bindings }
+            |> Seq.fold (fun state (k, v) -> state |> Map.add k v) context
+          body |> eval ctx
         Function (vars.Length, StructuralFunction f)
+      | Let (var, value, body) ->
+        body |> eval (context |> Map.add var (eval context value))
       | ArrayNew xs ->
-        Array (xs |> Seq.map (eval ctx) |> Seq.cache)
+        Array (xs |> Seq.map (eval context) |> Seq.cache)
       | RecordNew xs ->
         let mutable m = Map.empty
         for k, v in xs do
-          m <- m |> Map.add k (eval ctx v)
+          m <- m |> Map.add k (eval context v)
         Record m
       | RecordWith (orig, xs) ->
-        match eval ctx orig with
+        match eval context orig with
           | Record m ->
             let mutable m = m
             for k, v in xs do
-              m <- m |> Map.add k (eval ctx v)
+              m <- m |> Map.add k (eval context v)
             Record m
           | Null (EValue _)  as x -> x
           | _ -> error expr.info "not a record"
       | MemberAccess (name, e) ->
-        match (eval ctx e).[name] with
+        match (eval context e).[name] with
           | Null (EValue msg) -> error expr.info "%s" msg
           | x -> x
       | IndexerAccess (index, e) ->
-        match (eval ctx e).[index] with
+        let value =
+          match eval context index with
+            | Int i -> (eval context e).[i]
+            | String s -> (eval context e).[s]
+            | Null (EValue _) as e -> e 
+            | _ -> Null (EValue "not an index(int) or a field(string)")
+        match value with
           | Null (EValue msg) -> error expr.info "%s" msg
           | x -> x
+
+      | If (cond, a, b) ->
+        match eval context cond with
+          | Null _ | Bool false -> eval context b
+          | _ -> eval context a
       
       // pipeline optimizations
-      | Application (Item (Literal (String "|>")), [x; f])
-      | Application (Item (Literal (String "<|")), [f; x]) ->
-        Application (f, [x]) |> With.sameInfoOf expr |> eval ctx
-      | Application (Item (Literal (String "||>")), [Item (ArrayNew xs); f])
-      | Application (Item (Literal (String "<||")), [f; Item (ArrayNew xs)]) ->
-        Application (f, xs) |> With.sameInfoOf expr |> eval ctx
+      | Application (Item (Variable "|>"), [x; f])
+      | Application (Item (Variable "<|"), [f; x]) ->
+        Application (f, [x]) |> With.sameInfoOf expr |> eval context
+      | Application (Item (Variable "||>"), [Item (ArrayNew xs); f])
+      | Application (Item (Variable "<||"), [f; Item (ArrayNew xs)]) ->
+        Application (f, xs) |> With.sameInfoOf expr |> eval context
+
+      | Application (Item (Application (f, xs)), ys) ->
+        Application (f, xs @ ys) |> With.sameInfoOf expr |> eval context
       
       | Application (func, args) ->
-        let func = eval ctx func
-        match func.Invoke (args |> Seq.map (eval ctx) |> Seq.cache) with
+        let func = eval context func
+        match func.Invoke (args |> Seq.map (eval context) |> Seq.cache) with
           | Null (EValue msg) -> error expr.info "%s" msg
           | x -> x
-
-module Script =
-  open ScriptExpr
-  open System.IO
-  module Ctx = ScriptContext
-  
-  let execute ctx (writer: TextWriter) (script: Script) =
-    let rec exec ctx = function
-      | [] -> ()
-      | statement :: rest ->
-        match statement with
-          | Define (var, value) ->
-            exec (ctx |> Ctx.add var (eval ctx value)) rest
-          | Open record ->
-            match eval ctx record with
-              | Record m ->
-                exec { ctx with bindings = Map.append ctx.bindings m } rest
-              | _ ->
-                let loc =
-                  match record.info with
-                    | Some i -> sprintf " (at %s)" (to_s i.location)
-                    | None -> ""
-                loc |> sprintf "open failed, not a record%s"
-                    |> ctx.commentize
-                    |> writer.Write
-                exec ctx rest
-          | Block scr ->
-            exec ctx scr
-            exec ctx rest
-          | If (cond, a, b) ->
-            let next =
-              match eval ctx cond with
-                | Null _
-                | Bool false -> b
-                | _ -> a
-            exec ctx next
-            exec ctx rest
-          | For (var, xs, next) ->
-            match eval ctx xs with
-              | Array xs ->
-                for x in xs do
-                  exec (ctx |> Ctx.add var x) next
-              | Record m ->
-                for KVP(k, v) in m do
-                  let kvp = Map.ofSeq ["key", String k; "value", v] |> Record
-                  exec (ctx |> Ctx.add var kvp) next
-              | _ -> ()
-            exec ctx rest
-          | YieldObject obj ->
-            (eval ctx obj).AsCulturalString ctx.culture ctx.commentize
-            |> writer.Write
-          | YieldText str ->
-            writer.Write str
-    exec ctx script
-
-  let executeToString ctx script =
-    let sb = new StringBuilder()
-    do
-      use writer = new StringWriter(sb)
-      execute ctx writer script
-    sb.ToString()

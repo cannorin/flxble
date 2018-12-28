@@ -14,6 +14,7 @@
     <Compile Include="Context.fs" />
     <Compile Include="Builtin.fs" />
     <Compile Include="Template.fs" />
+    <Compile Include="ScriptObject.Dsl.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.0.3" />

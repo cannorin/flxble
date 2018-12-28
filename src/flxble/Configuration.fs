@@ -1,31 +1,36 @@
 module Flxble.Configuration
 open Flxble.Toml
 open Flxble.Toml.LensLike
-open Scriban.Runtime
+open Flxble.Templating
+open Flxble.Templating.SyntaxTree
 open System
 
-type IScribanExportable =
-  abstract member WriteTo : ScriptObject -> unit
+let rec private convert = function
+  | TomlValue.Bool b -> Bool b
+  | TomlValue.Int  i -> Int  i
+  | TomlValue.Float f -> Float f
+  | TomlValue.String s -> ScriptObject.String s
+  | TomlValue.Date d -> Date d
+  | TomlValue.Array nodes -> convert' nodes
+and private convert' = function
+  | NodeArray.Bools xs    -> xs |> List.map Bool  |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Ints xs     -> xs |> List.map Int   |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Floats xs   -> xs |> List.map Float |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Strings xs  -> xs |> List.map ScriptObject.String  |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Dates xs    -> xs |> List.map Date  |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Arrays xs   -> xs |> List.map convert' |> List.toSeq |> ScriptObject.Array
 
 type TomlDocument with
-  member this.WriteTo(sobj: ScriptObject) =
-    for KVP(k, v) in this do
-      sobj.Add(
-        k,
-        v.EraceType())
+  member this.ToScriptObjectMap() =
+    this.toml |> Map.map (fun _ v -> convert v)
 
 module ScriptObject =
-  let ofExportable (x: #IScribanExportable) =
-    let sobj = new ScriptObject()
-    x.WriteTo(sobj)
-    sobj
+  let inline from (x: ^X) =
+    (^X: (member ToScriptObjectMap: unit -> Map<string, ScriptObject>) x)
+    |> ScriptObject.Record
 
-  let inline importExportable (x: #IScribanExportable) sobj =
-    x.WriteTo(sobj)
-    sobj
-
-type BlogConfig(str) =
-  let toml = TomlDocument.parse str
+type BlogConfig(toml: TomlDocument) =
+  new (str: string) = new BlogConfig(TomlDocument.parse str)
   member val BaseUrl = toml%.ofString@."base_url"
   member val Title   = toml%.ofString@."title"
   member val Theme   = toml%.ofString@."theme"
@@ -46,7 +51,8 @@ type BlogConfig(str) =
   member val MarkdownExtensions = toml%.ofString@?"markdown" ?| "common"
   member val MarkdownExtraRulesDir = toml%.ofString@?"markdown_extra_rules" ?| "extra_rules/"
   member val RawTomlDocument = toml
-  interface IScribanExportable with member __.WriteTo(sobj) = toml.WriteTo(sobj)
+  member val ScriptObject = toml.ToScriptObjectMap()
+  member inline __.ToScriptObjectMap() = __.ScriptObject
 
 [<Literal>]
 let ExampleBlogConfig = @"# Required
@@ -83,15 +89,16 @@ markdown_extra_rules = ""extra_rules/""
                        # put your custom rule definitions here
 "
 
-type PageMetaData(str) =
-  let toml = TomlDocument.parse str
+type PageMetaData(toml: TomlDocument) =
+  new (str: string) = new PageMetaData(TomlDocument.parse str)
   member val PageType = toml%.ofString@?"type" ?| "none"
   member val Title = toml%.ofString@?"title" ?| ""
   member val Date = toml%.ofDate@?"date"
   member val Tags = toml%.ofArray%.ofString@?"tags" ?| []
   member val Description = toml%.ofString@?"description" ?| ""
   member val RawTomlDocument = toml
-  interface IScribanExportable with member __.WriteTo(sobj) = toml.WriteTo(sobj)
+  member val ScriptObject = toml.ToScriptObjectMap()
+  member inline __.ToScriptObjectMap() = __.ScriptObject
 
 [<Literal>]
 let ExamplePageMetadata = @"# Optional, will be 'none' by default
@@ -122,7 +129,7 @@ tags = []
     PageMetaData(emptyMetadata)
 
   /// a metadata block must be on top on the file
-  /// enclosed by lines consisting of only three hyphens `---` or more.
+  /// enclosed by lines consisting of only three hyphens `---`.
   let tryExtract str =
     let lines =
       str |> String.splitSeq ["\r\n"; "\r"; "\n"]

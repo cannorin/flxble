@@ -219,7 +219,7 @@ let exprBlock = expr (DefaultSpaceCombinators())
 
 let exprInline = expr (LineSplicingSpaceCombinators())
 
-let template : parser<Script> = recursive <| fun statements ->
+let template : parser<Template> = recursive <| fun statements ->
   let inline openClause (sc: #sc<_>) =
     sc.ws (syn "open") >>. expr sc
     |>> Open
@@ -317,3 +317,12 @@ let template : parser<Script> = recursive <| fun statements ->
     ] <?> "%% <statement> | {% <statement> %} | {{ <expr> }} | <raw text>"
   
   many stmts
+
+open Flxble.Toml
+
+let templateWithTomlMetadata =
+  let tomlMetadataBlock =
+    embeddedBlock "---" "---" (skipNewline >>. Parser.document .>> spaces)
+    |>> TomlDocument.fromTokens
+
+  opt (spaces >>. tomlMetadataBlock .>> skipNewline) .>>. template

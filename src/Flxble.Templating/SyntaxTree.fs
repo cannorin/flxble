@@ -164,23 +164,23 @@ type ScriptStatement =
   /// %%begin
   /// ...
   /// %%end
-  | Block of Script
+  | Block of Template
   /// %%when CONDITION do
   /// ...
   /// \[%%otherwise
   /// ...\]
   /// %%end
-  | When of cond:ScriptExprWithInfo * exec:Script * otherwise:Script option
+  | When of cond:ScriptExprWithInfo * exec:Template * otherwise:Template option
   /// %%for NAME in EXPR do
   /// ...
   /// %%end
-  | For of variable:string * ScriptExprWithInfo * Script
+  | For of variable:string * ScriptExprWithInfo * Template
   /// {{ EXPR }}
   | YieldObject of ScriptExprWithInfo
   /// ANY_OTHER_STRING
   | YieldText of string
 
-and Script = ScriptStatement list
+and Template = ScriptStatement list
 
 module ScriptExpr =
   let inline private error info format =

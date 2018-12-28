@@ -1,7 +1,6 @@
 module Flxble.Models
 open Flxble.Configuration
-open Scriban
-open Scriban.Runtime
+open Flxble.Templating
 open System.IO
 
 /// Page type. Also specifies which template to apply.
@@ -43,14 +42,14 @@ type PageInfo = {
       | Some "none"
       | None -> PageType.None
       | Some str -> PageType.Other str
-  interface IScribanExportable with
-    member this.WriteTo(sobj) =
-      let location =
-        match this.format with
-          | PageFormat.Markdown -> Path.ChangeExtension(this.relativeLocation, "html")
-          | _ -> this.relativeLocation
-      sobj.Add("location", location)
-      this.metadata |> Option.iter (ScriptObject.ofExportable >> sobj.Import)
+  member this.ToScriptObjectMap() =
+    let location =
+      match this.format with
+        | PageFormat.Markdown -> Path.ChangeExtension(this.relativeLocation, "html")
+        | _ -> this.relativeLocation
+    let map =
+      this.metadata |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
+    map |> Map.add "location" (SyntaxTree.ScriptObject.String location)
 
 [<Struct>]
 type TemplateInfo = {
@@ -59,8 +58,8 @@ type TemplateInfo = {
   metadata: PageMetaData option
   template: Template
 } with
-  interface IScribanExportable with
-    member this.WriteTo(sobj) =
-      sobj.Add("name", this.name)
-      this.metadata |> Option.iter (ScriptObject.ofExportable >> sobj.Import)
+  member this.ToScriptObjectMap() = 
+    let map =
+      this.metadata |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
+    map |> Map.add "template_name" (SyntaxTree.ScriptObject.String this.name)
 

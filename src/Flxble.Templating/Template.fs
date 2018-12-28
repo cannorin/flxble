@@ -3,6 +3,9 @@ namespace Flxble.Templating
 open System.Text
 open SyntaxTree
 
+type TemplateContext = Context.TemplateContext
+type Template = SyntaxTree.Template
+
 module TemplateContext =
   /// Creates a new `TemplateContext` with the `culture` and a function
   /// `commentize` to comment out error messages.
@@ -51,8 +54,23 @@ module Template =
     runParserOnString Parser.template () name str
     |> unwrapParseResult
 
+  /// Loads a template with optionally TOML metadata from the specified `path` with `encoding`.
+  let loadFileWithTomlMetadata encoding path =
+    runParserOnFile Parser.templateWithTomlMetadata () path encoding
+    |> unwrapParseResult
+
+  /// Loads a template with optionally TOML metadata from the input `stream` of `name` with `encoding`.
+  let loadStreamWithTomlMetadata name encoding stream =
+    runParserOnStream Parser.templateWithTomlMetadata () name stream encoding
+    |> unwrapParseResult
+
+  /// Loads a template with optionally TOML metadata from the string `str` of `name`.
+  let loadStringWithTomlMetadata name str =
+    runParserOnString Parser.templateWithTomlMetadata () name str
+    |> unwrapParseResult
+
   /// Renders the `script` to the specified `writer` with the `context`.
-  let render context (writer: TextWriter) (script: Script) =
+  let render context (writer: TextWriter) (script: Template) =
     let rec exec ctx = function
       | [] -> ()
       | statement :: rest ->

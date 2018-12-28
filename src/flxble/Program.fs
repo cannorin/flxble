@@ -1,4 +1,4 @@
-﻿module Flexble.Main
+﻿module Flxble.Main
 open Flxble
 open Flxble.Toml
 open Flxble.Toml.LensLike
@@ -6,9 +6,7 @@ open Flxble.Configuration
 open Flxble.Context
 open System
 open System.Reflection
-open Scriban
-open Scriban.Parsing
-open Scriban.Runtime
+
 
 [<EntryPoint>]
 let main argv =

@@ -120,6 +120,10 @@ let inline defaultBindings (culture: CultureInfo) =
     yield cmp (<) "<"
     yield cmp (>=) ">="
     yield cmp (<=) "<="
+    
+    // null check
+    yield "is_null", fn 1 (function [Null _] -> Bool true | _ -> Bool false)
+    yield "is_not_null", fn 1 (function [Null _] -> Bool false | _ -> Bool true)
 
     // logical
     yield "||", fnlazy 2 (fun xs ->
@@ -327,6 +331,13 @@ let inline defaultBindings (culture: CultureInfo) =
           xs |> Seq.isEmpty |> Bool
         | xs -> err 1 "is_empty" xs
       )
+      yield "indexed", fn 1 (function
+        | [Array xs] ->
+          xs |> Seq.indexed
+             |> Seq.map (fun (i, x) -> Record (Map.ofList ["index", Int i; "item", x]))
+             |> Array
+        | xs -> err 1 "indexed" xs
+      )
       yield "find", fn 2 (function
         | [p; Array xs] ->
            xs |> Seq.tryFind (Seq.singleton >> p.Invoke >> toBool)
@@ -444,6 +455,20 @@ let inline defaultBindings (culture: CultureInfo) =
       yield s1 Uri.EscapeUriString "url_escape" String
       yield s1 Uri.EscapeDataString "url_encode" String
       yield s1 Net.WebUtility.HtmlEncode "html_escape" String
+    }
+
+    // path module
+    yield "path", record <| seq {
+      yield "combine", fn 1 (function
+        | [Array xs] ->
+          xs |> Seq.map (toStr culture) |> Path.combineMany |> String
+        | xs -> err 1 "combine" xs
+      )
+      yield "make_relative_to", fn 2 (function
+        | [String root; String path] ->
+          Path.makeRelativeTo root path |> String
+        | xs -> err 2 "make_relative_to" xs
+      )
     }
 
     // record module

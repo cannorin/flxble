@@ -5,9 +5,9 @@
   <ItemGroup>
     <ProjectReference Include="..\src\Flxble.Templating\Flxble.Templating.fsproj" />
     <ProjectReference Include="..\src\Flxble.Toml\Flxble.Toml.fsproj" />
-    <ProjectReference Include="..\src\flxble\flxble.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Toml.Tests.fs" />
     <Compile Include="Templating.Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

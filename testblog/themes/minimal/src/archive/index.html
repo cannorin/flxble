@@ -10,22 +10,20 @@
       </header>
       <section class="post-content">
         <p>
-          {{ first = true }}
-          {{ for month in months }}
-            {{ if !first }}
+          %% when is_not_null months && array.length months > 0 do
+            %% for month in months |> array.indexed do
+              %% when month.index <> 0 do
               ,
-            {{ end }}
-            {{ first = false }}
-            {{ if config.archive != null }}
+              %% end
+              %% when is_not_null config.archive do
               <span class="post-date">
-              <a href="{{config.base_url}}/{{config.archive}}/{{month.year}}-{{month.month}}.html">
-                {{date.to_string month "%b %Y"}}
-              </a>
+              <a href="{{config.base_url}}/{{config.archive}}/{{month.item.year}}-{{month.item.month}}.html">{{ month.item |> date.to_string "MMM d yyy" }}</a>
               </span>
-            {{ else }}
-              {{date.to_string month "%b %Y"}}
-            {{ end }}
-          {{ end }}
+              %% otherwise
+                {{ month.item |> date.to_string "MMM d yyy" }}
+              %% end
+            %% end
+          %% end
         </p>
       </section>
   </article>

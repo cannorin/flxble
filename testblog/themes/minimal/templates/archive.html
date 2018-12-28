@@ -6,10 +6,10 @@
 <main id="content" class="content" role="main">
   <article class="post">
     <header class="post-header">
-      <h1 class="post-title">{{ archive.title }}</h1>
+      <h1 class="post-title">{{ title }}</h1>
     </header>
-    {{ for page in archive.pages }}
-      {{ if page | object.has_key "title" }}
+    %% for page in pages do
+      %% when is_not_null page.title do
         <article class="post">
           <header class="post-header">
             <h1 class="post-title">
@@ -18,37 +18,38 @@
               </a>
             </h1>
           </header>
-          {{ if page.description != null }}
+          %% when is_not_null page.description do
           <section class="post-excerpt">
             {{ page.description }}
           </section>
-          {{ end }}
+          %% end
           <footer class="post-meta">
-            {{ if page | object.has_key "date" }}
-            <time class="post-date" datetime="{{page.date}}">
-              {{ if config.archive != null }}
+            %% when is_not_null page.date do
+            %% def date_iso8601 = page.date |> date.to_string "o"
+            <time class="post-date" datetime="{{date_iso8601}}">
+              %% when is_not_null config.archive do
                 <a href="{{config.base_url}}/{{config.archive}}/{{page.date.year}}-{{page.date.month}}.html">
-                  {{date.to_string page.date "%d %b %Y"}}
+                {{ page.date |> date.to_string "MMM d yyy" }}
                 </a>
-              {{ else }}
-                  {{date.to_string page.date "%d %b %Y"}}
-              {{ end }}
+              %% otherwise
+                {{ page.date |> date.to_string "MMM d yyy" }}
+              %% end
               &nbsp;
             </time>
-            {{ end }}
+            %% end
             <span class="post-tags">
               Tags:
-              {{ for tag in page.tags }}
-                {{ if config.tag != null }}
+              %% for tag in page.tags do
+                %% when is_not_null config.tag do
                   <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
-                {{ else }}
+                %% otherwise
                   <span class="tag-name">{{ tag }}</span>
-                {{ end }}
-              {{ end }}
+                %% end
+              %% end
             </span>
           </footer>
         </article>
-      {{ end }}
-    {{ end }}
+      %% end
+    %% end
   </article>
 </main>

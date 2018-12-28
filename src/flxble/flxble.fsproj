@@ -2,10 +2,26 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>netcoreapp2.2; net472</TargetFrameworks>
+    <OutputPath>../../bin</OutputPath>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.2' " />
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.2' ">
+    <Product>flxble</Product>
+    <Description>Fast Lightweight eXtensible BLog Engine</Description>
+    <VersionPrefix>1.0.0</VersionPrefix>
+
+    <Copyright>Apache 2</Copyright>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageLicenseUrl>https://github.com/cannorin/flxble/blob/master/LICENSE.txt</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/cannorin/flxble</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    
+    <IsPackable>true</IsPackable>
+    <!-- <PackAsTool>true</PackAsTool> -->
+    <ToolCommandName>flxble</ToolCommandName>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Flxble.Toml\Flxble.Toml.fsproj" />
+    <ProjectReference Include="..\Flxble.Templating\Flxble.Templating.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../common/prelude.fs" />

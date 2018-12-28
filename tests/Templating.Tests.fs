@@ -4,6 +4,8 @@ open System
 open System.Globalization
 open Xunit
 open FsUnit.Xunit
+open Flxble.Toml
+open Flxble.Toml.LensLike
 open Flxble.Templating
 open Flxble.Templating.SyntaxTree
 open FParsec
@@ -204,4 +206,51 @@ let ``Lambda captures the current context`` () =
  """
   let result = evalTemplateWithFileName "test" document
   result |> should haveSubstring "42"
+
+[<Fact>]
+let ``Can parse and render a template with TOML metadata`` () =
+  let document = """
+---
+title = "Test Document"
+answer = 42
+---
+
+{{ title }}
+%% def pages = [ \
+  { title = "page 1", showTag = true,  tags = ["tag1", "tag2", "tag3"] }, \
+  { title = "page 2", showTag = false, tags = ["tag2", "tag3", "tag4"] }, \
+  { title = "page 3", showTag = true,  tags = ["tag3", "tag4", "tag5"] } \
+]
+-- Pages --
+%% for page in pages do
+Title: {{page.title}}
+  %% when page.showTag \
+      && (array.length page.tags) > 0 do
+  Tags: {{page.tags.[0]}}{% for tag in page.tags |> array.skip 1 do %}, {{tag}}{% end %}
+  %% otherwise
+  No tags.
+  %% end
+%% end
+"""
+  let expected = """
+Test Document
+-- Pages --
+Title: page 1
+  Tags: tag1, tag2, tag3
+Title: page 2
+  No tags.
+Title: page 3
+  Tags: tag3, tag4, tag5
+"""
+  let metadata, template = Template.loadStringWithTomlMetadata "test" document
+
+  let tomlDocument = metadata |> Option.get
+
+  let ctx' =
+    ctx |> TemplateContext.add "title" (tomlDocument%.ofString@."title" |> String)
+
+  let result = template |> Template.renderToString ctx'
+
+  tomlDocument%.ofInt@."answer" |> should equal 42
+  result |> should equal expected
 

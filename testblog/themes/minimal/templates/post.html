@@ -6,29 +6,30 @@
 <main class="content" role="main">
   <article class="post">
     <header class="post-header">
-      <h1 class="post-title">{{page.title}}</h1>
+      <h1 class="post-title">{{title}}</h1>
       <section class="post-meta">
-        {{ if page | object.has_key "date" }}
-        <time class="post-date" datetime="{{page.date}}">
-          {{ if config.archive != null }}
-            <a href="{{config.base_url}}/{{config.archive}}/{{page.date.year}}-{{page.date.month}}.html">
-              {{date.to_string page.date "%d %b %Y"}}
+        %% when is_not_null date do
+          %% def date_iso8601 = date |> date.to_string "o"
+        <time class="post-date" datetime="{{date_iso8601}}">
+          %% when is_not_null config.archive do
+            <a href="{{config.base_url}}/{{config.archive}}/{{date.year}}-{{date.month}}.html">
+              {{ date |> date.to_string "MMM d yyy" }}
             </a>
-          {{ else }}
-              {{date.to_string page.date "%d %b %Y"}}
-          {{ end }}
+          %% otherwise
+              {{ date |> date.to_string "MMM d yyy" }}
+          %% end
         </time>
         &nbsp;
-        {{ end }}
+        %% end
         <span class="post-tags">
           Tags:
-          {{ for tag in page.tags }}
-            {{ if config.tag != null }}
+          %% for tag in tags do
+            %% when is_not_null config.tag do
               <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
-            {{ else }}
-              <span class="tag-name">{{ tag }}</span>
-            {{ end }}
-          {{ end }}
+            %% otherwise
+              <span class="tag-name">{{tag}}</span>
+            %% end
+          %% end
         </span>
       </section>
     </header>
@@ -39,24 +40,26 @@
 
     <footer class="post-footer">
       <section class="prev-next-date-page">
-        {{ if prev_date_page != null }}
+        %% when is_not_null prev_date_page do
         <a href="{{config.base_url}}/{{prev_date_page.location}}">
           {{ prev_date_page.title }}
         </a>
-        {{ end }}
-        {{ if next_date_page != null }}
+        %% end
+        %% when is_not_null next_date_page do
         <a href="{{config.base_url}}/{{next_date_page.location}}">
           {{ next_date_page.title }}
         </a>
-        {{ end }}
+        %% end
       </section>
       <section class="share">
         <h4>Share this post</h4>
-        {{ title = html.url_encode page.title }}
+        %% begin
+        %% def title = title |> string.url_encode
         <a class="icon-twitter" href="https://twitter.con/intent/tweet?text={{title}} - "
            onclick="window.open(this.href+' '+window.location.href, 'twitter-share', 'width=550,height=235');return false;">
           <span class="share-twitter">Twitter</span>
         </a>
+        %% end
       </section>
     </footer>
   </article>

@@ -1,12 +1,14 @@
 module Flxble.Context
 open Flxble.Configuration
 open Flxble.Models
-open Scriban
-open Scriban.Runtime
+open Flxble.Templating
+open Flxble.Templating.SyntaxTree
+open Flxble.Templating.ScriptObject.Dsl
 open System
 open System.IO
 open System.Runtime.ExceptionServices
 open System.Globalization
+open DataTypeExtra
 
 type ContextHelperCache(this: Context) =
   member val Culture =
@@ -51,6 +53,37 @@ type ContextHelperCache(this: Context) =
             match posts |> Seq.tryFindIndex (fun x -> x.metadata.Value.Date = date) with
               | None -> None, None
               | Some i -> posts |> Seq.tryItem (i-1), posts |> Seq.tryItem (i+1)
+    )
+  member val AsScriptObjectMap =
+    lazy (
+      let pagesOfType x =
+        match x |> Seq.toList with
+          | [ScriptObject.String name] ->
+            this.PagesOfType name |> Seq.map ScriptObject.from |> ScriptObject.Array
+          | _ -> ScriptObject.Null DataTypeExtra.ENull
+
+      let pagesOfTag x =
+        match x |> Seq.toList with
+          | [ScriptObject.String name] ->
+            this.PagesOfTag name |> Seq.map ScriptObject.from |> ScriptObject.Array
+          | _ -> ScriptObject.Null DataTypeExtra.ENull
+
+      let pagesOfMonth x =
+        match x |> Seq.toList with
+          | [ScriptObject.Int year; ScriptObject.Int month] ->
+            this.PagesOfMonth year month |> Seq.map ScriptObject.from |> ScriptObject.Array
+          | _ -> ScriptObject.Null ENull
+
+      Map.ofSeq <| seq {
+        yield "config", this.config |> ScriptObject.from
+        yield "pages", array' (this.pages |> Seq.map ScriptObject.from)
+        yield "templates", ScriptObject.Record (this.templates |> Map.map (fun _ -> ScriptObject.from))
+        yield "tags",  array' (this.Tags  |> Seq.map ScriptObject.String)
+        yield "months", array' (this.Months |> Seq.map ScriptObject.Date)
+        yield "pages_of_month", function' 2 pagesOfMonth
+        yield "pages_of_tag", function' 1 pagesOfTag
+        yield "pages_of_type", function' 1 pagesOfType
+      }
     )
 
 and Context = {
@@ -97,42 +130,8 @@ and Context = {
         | _ -> false)
 
   member this.PrevNextPostFinder = this.Cache.PrevNextPostFinder.Value
-  interface IScribanExportable with
-    member this.WriteTo(sobj) =
-      let config = ScriptObject.ofExportable this.config
-      sobj.Add("config", config)
 
-      let pages = new ScriptArray()
-      pages.AddRange (
-        this.pages
-          |> Seq.map (ScriptObject.ofExportable >> box))
-      sobj.Add("all_pages", pages)
-
-      let createFunction name converter f =
-        sobj.Import(name, converter f)
-
-      createFunction
-        "pages_of_type"
-        (fun f -> (f >> Seq.map ScriptObject.ofExportable) |> Func.ofFSharp1)
-        this.PagesOfType
-
-      createFunction
-        "pages_of_tag"
-        (fun f -> (f >> Seq.map ScriptObject.ofExportable) |> Func.ofFSharp1)
-        this.PagesOfTag
-
-      createFunction
-        "pages_of_month"
-        (fun f -> (f >> ((<<) (Seq.map ScriptObject.ofExportable))) |> Func.ofFSharp2)
-        this.PagesOfMonth
-
-      sobj.Add("tags", this.Tags)
-      sobj.Add("months", this.Months)
-
-      let templates = new ScriptObject()
-      for KVP(k, v) in this.templates do
-        templates.Add(k, ScriptObject.ofExportable v)
-      sobj.Add("templates", templates)
+  member this.ToScriptObjectMap() = this.Cache.AsScriptObjectMap.Value
 
 type FlxbleException
   (ctx: Context, operationName: string, target: string, innerExn: ExceptionDispatchInfo) =
@@ -210,8 +209,10 @@ module Context =
   let private getTemplateInfo (path: string) ctx =
     tryOperation ctx "addTemplate" path <| fun () ->
       let absPath = Path.GetFullPath path
-      let content = File.ReadAllText absPath
-      let (metadata, content) = PageMetaData.tryExtract content
+      let toml, template =
+        let encoding = Text.Encoding.UTF8
+        Template.loadFileWithTomlMetadata encoding absPath
+      let metadata = toml |> Option.map PageMetaData
       let dependency =
         metadata |> Option.map (fun md -> md.PageType)
       let name = Path.GetFileNameWithoutExtension absPath
@@ -219,7 +220,7 @@ module Context =
         name = name
         dependsOn = dependency
         metadata = metadata
-        template = Template.Parse content
+        template = template
       }
 
   /// loads the theme to the current context.

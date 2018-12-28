@@ -1,18 +1,5 @@
-{{
-  if page | object.has_key "title"
-    title = page.title + " - " + config.title
-  else if archive | object.has_key "title"
-    title = archive.title + " - " + config.title
-  else
-    title = config.title
-  end
-
-  if page | object.has_key "description"
-    description = page.description
-  else
-    description = config.description
-  end
-}}
+%% def title = title ?| config.title
+%% def description = description ?| config.description
 
 <!DOCTYPE html>
 <html>
@@ -21,20 +8,21 @@
   <title>
     {{ title }}
   </title>
-  <meta name="description" content="{{ html.escape description }}" />
+  <meta name="description" content="{{ string.html_escape description }}" />
 </head>
 
-<body class="{{template.body_class}}">
+%% def body_class = body_class ?| ""
+<body class="{{body_class}}">
   <header class="default-header">
     <a href="{{config.base_url}}/index.html">Home</a>
-    {{ if config.tag != null }}
+    %% when is_not_null config.tag do
       &nbsp;
       <a href="{{config.base_url}}/{{config.tag}}/index.html">Tags</a>
-    {{ end }}
-    {{ if config.archive != null }}
+    %% end
+    %% when is_not_null config.archive do
       &nbsp;
       <a href="{{config.base_url}}/{{config.archive}}/index.html">Archive</a>
-    {{ end }}
+    %% end
   </header>
   {{content}}
 

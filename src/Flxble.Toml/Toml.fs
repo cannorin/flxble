@@ -159,8 +159,8 @@ module Parser =
     (pbool       |>> TomlValue.Bool ) <|> 
     (pdate       |>> TomlValue.Date ) <|> 
     (pstr        |>> TomlValue.String)<|> 
-    (pfloat      |>> TomlValue.Float) <|> 
     (pint        |>> TomlValue.Int  ) <|> 
+    (pfloat      |>> TomlValue.Float) <|> 
     (pboolarray  |>> TomlValue.Array) <|>
     (pdatearray  |>> TomlValue.Array) <|>
     (pintarray   |>> TomlValue.Array) <|>
@@ -253,27 +253,29 @@ type TomlDocument = {
     member this.GetEnumerator() = (this.toml :> Collections.IEnumerable).GetEnumerator()
 
 module TomlDocument =
+  let fromTokens tokens =
+    let mutable toml = Map.empty
+    let mutable currentKeyGroup = None
+    for token in tokens do
+      match token with
+      | KeyGroup kg -> currentKeyGroup <- Some kg
+      | KeyValue (key,value) -> 
+        let key = 
+          seq {
+            if currentKeyGroup.IsSome then
+              yield! currentKeyGroup.Value
+            yield key
+          } |> String.concat "."
+        toml <- toml |> Map.add key value
+    { toml = toml }
+  
   /// Parses a TOML string `text` to a `TomlDocument`.
   let parse text =
-    let toml = Dictionary<string, TomlValue>()
-    let mutable currentKeyGroup = None
-
     match run document text with
       | Success(tokens,_,_) ->
-        for token in tokens do
-          match token with
-          | KeyGroup kg -> currentKeyGroup <- Some kg
-          | KeyValue (key,value) -> 
-            let key = 
-              seq {
-                if currentKeyGroup.IsSome then
-                  yield! currentKeyGroup.Value
-                yield key
-              } |> String.concat "."
-            toml.Add(key, value)
+        fromTokens tokens
       | Failure(msg, _, _) ->
         TomlParseError msg |> raise
-    { toml = toml |> Dict.toMap }
 
 #nowarn "0064" // This construct causes code to be less generic than indicated by the type annotations.
 

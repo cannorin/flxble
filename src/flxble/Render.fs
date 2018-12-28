@@ -7,12 +7,13 @@ open FSharp.Collections
 open Flxble.Configuration
 open Flxble.Models
 open Flxble.Context
-open Scriban
-open Scriban.Runtime
+open Flxble.Templating
+open Flxble.Templating.SyntaxTree
+open Flxble.Templating.ScriptObject.Dsl
 open Markdig
 open System.Net
 
-let rec private applyTemplateToHtml ctx sobj templateName html fileName =
+let rec private applyTemplateToHtml ctx renderCtx localVariables templateName html fileName =
   tryOperation ctx "applyTemplateToHtml" fileName <| fun () ->
     let tmpInfo =
       ctx.templates
@@ -22,21 +23,20 @@ let rec private applyTemplateToHtml ctx sobj templateName html fileName =
             ctx.logger.fail
               "the specified template '%s' does not exist"
               templateName)
-  
-    let sobj' =
-      let x = new ScriptObject()
-      x.Import(sobj)
-      let tobj = tmpInfo |> ScriptObject.ofExportable
-      x.Add("template", tobj)
-      x.Add("content", html)
-      x
 
+    let localVariables =
+      Map.append localVariables (tmpInfo.ToScriptObjectMap())
+  
     let html' =
-      tmpInfo.template.Render(sobj')
+      let rctx =
+        renderCtx
+        |> TemplateContext.addMany localVariables
+        |> TemplateContext.add "content" (string' html)
+      tmpInfo.template |> Template.renderToString rctx
     
     match tmpInfo.dependsOn with
       | Some tmpName ->
-        applyTemplateToHtml ctx sobj' tmpName html' fileName
+        applyTemplateToHtml ctx renderCtx localVariables tmpName html' fileName
       | None -> html'
 
 type mpb = MarkdownPipelineBuilder
@@ -71,7 +71,7 @@ let private convertIfMarkdown pipeline page =
     }
   else page
 
-let private renderPageToOutput ctx pipeline prevnextfinder sobj page =
+let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
   tryOperation ctx "renderPageToOutput" page.relativeLocation <| fun () ->
     if Directory.Exists ctx.OutputDir |> not then
       ctx.logger.warning "the output directory '%s' does not exist, creating." ctx.config.OutputDir
@@ -87,27 +87,38 @@ let private renderPageToOutput ctx pipeline prevnextfinder sobj page =
 
         ctx.logger.trace "generating '%s'..." path
 
-        let page = convertIfMarkdown pipeline page
-        assert (page.format = PageFormat.Html)
+        let pageVariables = page.ToScriptObjectMap()
 
-        let sobj' = new ScriptObject()
-        let pageObj = ScriptObject.ofExportable page
-        sobj'.Import(sobj)
-        sobj'.Add("page", pageObj)
+        let prevnextObjs = seq {
+          match page.metadata with
+            | None -> ()
+            | Some mt ->
+              let prev, next = prevnextfinder mt.PageType page
+              match prev with
+                | Some x -> yield "prev_date_page", ScriptObject.from x
+                | None -> ()
+              match next with
+                | Some x -> yield "next_date_page", ScriptObject.from x
+                | None -> ()
+        }
 
-        page.metadata |> Option.iter (fun mt ->
-          let prev, next = prevnextfinder mt.PageType page
-          prev |> Option.iter (fun x -> sobj'.Add("prev_date_page", ScriptObject.ofExportable x))
-          next |> Option.iter (fun x -> sobj'.Add("next_date_page", ScriptObject.ofExportable x))
-        )
+        let renderCtx = 
+          templateCtx |> TemplateContext.addMany pageVariables
+                      |> TemplateContext.addMany (Map.ofSeq prevnextObjs)
 
         let content =
-          Template.Parse(page.content).Render(sobj')
+          match page.format with
+            | PageFormat.Markdown ->
+              Markdown.ToHtml(page.content, pipeline)
+            | PageFormat.Html ->
+              Template.loadString page.absoluteLocation page.content
+              |> Template.renderToString renderCtx
+            | _ -> failwith "impossible"
 
         let html =
           match page.metadata with
             | Some mt when mt.PageType <> "none" ->
-              applyTemplateToHtml ctx sobj' mt.PageType content page.absoluteLocation
+              applyTemplateToHtml ctx renderCtx Map.empty mt.PageType content page.absoluteLocation
             | _ -> content
 
         let outDir = path |> Path.GetDirectoryName
@@ -123,11 +134,8 @@ let private renderPageToOutput ctx pipeline prevnextfinder sobj page =
           Directory.CreateDirectory outDir |> ignore
         File.Copy(srcpath, destpath, true)
 
-let private renderArchive archiveType tempName elements predicate title printer outDir ctx sobj =
+let private renderArchive archiveType tempName elements predicate title printer outDir ctx renderCtx =
   tryOperation ctx (sprintf "renderArchive: %s" archiveType) "current context" <| fun () ->
-    let sobj' = new ScriptObject()
-    sobj'.Import(sobj)
-    
     let tagTmp =
       ctx.templates
         |> Map.tryFind tempName
@@ -141,84 +149,87 @@ let private renderArchive archiveType tempName elements predicate title printer 
             format = PageFormat.Html | PageFormat.Markdown } as page ->
           Some (Path.ChangeExtension(l, ".html"), meta, page)
         | _ -> None)
+    seq {
+      for element in elements do
+        yield async {
+          let pagesObj = 
+            pages
+              |> Seq.filter (fun (_, x, _) -> predicate element x)
+              |> Seq.map    (fun (_, _, page) -> page |> ScriptObject.from)
+              |> ScriptObject.Array
 
-    for element in elements do
-      let pagesObj = new ScriptArray()
+          let archiveObj =
+            [|
+              "pages", pagesObj
+              "title", ScriptObject.String (title element)
+              "archive_type",  ScriptObject.String archiveType
+            |] |> Map.ofArray
 
-      pagesObj.AddRange(
-        pages
-          |> Seq.filter (fun (_, x, _) -> predicate element x)
-          |> Seq.map    (fun (_, _, page) -> page |> ScriptObject.ofExportable |> box)
-      )
+          let renderCtx = renderCtx |> TemplateContext.addMany archiveObj
+        
+          let outputDir = Path.Combine(ctx.OutputDir, outDir)
 
-      let arcObj = new ScriptObject()
-      arcObj.Add("pages", pagesObj)
-      arcObj.Add("title", title element)
-      arcObj.Add("type",  archiveType)
-
-      sobj'.Add("archive", arcObj)
-    
-      let outputDir = Path.Combine(ctx.OutputDir, outDir)
-
-      if Directory.Exists outputDir |> not then
-        ctx.logger.warning "the output directory '%s' does not exist, creating." outputDir
-        Directory.CreateDirectory(outputDir) |> ignore
-    
-      let outPath = Path.Combine(outputDir, sprintf "%s.html" <| printer element)
-      ctx.logger.trace "generating '%s'..." outPath
-      
-      let html =
-        let h = tagTmp.template.Render(sobj')
-        match tagTmp.dependsOn with
-          | Some x -> applyTemplateToHtml ctx sobj' x h (sprintf "template: %s" x)
-          | None -> h
-      
-      File.WriteAllText(outPath, html)
+          if Directory.Exists outputDir |> not then
+            ctx.logger.warning "the output directory '%s' does not exist, creating." outputDir
+            Directory.CreateDirectory(outputDir) |> ignore
+        
+          let outPath = Path.Combine(outputDir, sprintf "%s.html" <| printer element)
+          ctx.logger.trace "generating '%s'..." outPath
+          
+          let html =
+            let h = tagTmp.template |> Template.renderToString renderCtx
+            match tagTmp.dependsOn with
+              | Some x -> applyTemplateToHtml ctx renderCtx Map.empty x h (sprintf "template: %s" x)
+              | None -> h
+          
+          File.WriteAllText(outPath, html)
+        }
+    }
 
 let private renderTagArchive (ctx: Context) sobj =
   ctx.config.TagDir
-  |> Option.iter (fun dir ->
+  |> Option.map (fun dir ->
     ctx.logger.info "processing tag archive..."
     renderArchive "tag" "archive" ctx.Tags
       (fun tag x -> x.Tags |> List.contains tag)
       (sprintf "Tag: %s")
       WebUtility.UrlEncode dir ctx sobj)
+  ?| Seq.empty
 
 let private renderMonthlyArchive (ctx: Context) sobj =
   let inline getMonthName i =
     ctx.Culture.DateTimeFormat.GetMonthName(i)
   ctx.config.ArchiveDir
-  |> Option.iter (fun dir ->
+  |> Option.map (fun dir ->
     ctx.logger.info "processing monthly archive..."
     renderArchive "archive" "archive" ctx.Months
       (fun d x -> x.Date.IsSome && x.Date.Value.Year = d.Year && x.Date.Value.Month = d.Month)
       (fun d -> sprintf "Archive: %s %i" (getMonthName d.Month) d.Year)
       (fun d -> sprintf "%i-%i" d.Year d.Month)
       dir ctx sobj)
+  ?| Seq.empty
 
 /// Render everything in the current context.
 let everything (ctx: Context) =
   tryOperation ctx "Render.everything" "current context" <| fun () ->
     let pipeline = generatePipeline ctx
-    let sobj = ctx |> ScriptObject.ofExportable
-
-    // scriban's null check is broken, so empty dicts are needed beforehand:
-    sobj.Add("page", Dict.empty<string, obj>)
-    sobj.Add("archive", Dict.empty<string, obj>)
+    let renderCtx =
+      let rctx = TemplateContext.create ctx.Culture (sprintf "<!-- %s -->")
+      rctx |> TemplateContext.addMany (ctx.ToScriptObjectMap())
 
     let prevnextfinder = ctx.PrevNextPostFinder
 
     let result =
       seq {
-        yield async { renderTagArchive ctx sobj }
-        yield async { renderMonthlyArchive ctx sobj }
+        yield! renderTagArchive ctx renderCtx
+        yield! renderMonthlyArchive ctx renderCtx
 
         for pageChunk in ctx.pages |> Seq.chunkBySize 50 do
         // for page in ctx.pages do
           yield async {
             for page in pageChunk do
               ctx.logger.trace "processing file '%s'..." page.absoluteLocation
-              renderPageToOutput ctx pipeline prevnextfinder sobj page
+              renderPageToOutput ctx renderCtx pipeline prevnextfinder page
           }
       } |> Async.Parallel
         |> Async.Catch

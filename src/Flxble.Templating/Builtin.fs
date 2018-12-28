@@ -17,13 +17,15 @@ let inline record m =
 let inline err i name (objs: ScriptObject seq) =
   let objs = objs |> Seq.cache
   if i = Seq.length objs then
-    sprintf "the function '%s' does not support type(s) %s"
-      name (objs |> Seq.map (fun x -> x.ObjectType |> sprintf "'%A'") |> String.concat ", ")
-    |> EValue |> Null
+    lazy (
+      sprintf "the function '%s' does not support type(s) %s"
+        name (objs |> Seq.map (fun x -> x.ObjectType |> sprintf "'%A'") |> String.concat ", ")
+    ) |> EValue |> Null
   else
+    lazy (
     sprintf "the function '%s' takes %i argument(s) but given %i"
       name i (Seq.length objs)
-    |> EValue |> Null
+    ) |> EValue |> Null
 
 let inline toBool obj =
   match obj with
@@ -341,7 +343,7 @@ let inline defaultBindings (culture: CultureInfo) =
       yield "find", fn 2 (function
         | [p; Array xs] ->
            xs |> Seq.tryFind (Seq.singleton >> p.Invoke >> toBool)
-           ?| Null (EValue "element not found")
+           ?| Null (EValue (lazy "element not found"))
         | xs -> err 2 "find" xs
       )
       yield "length", fn 1 (function

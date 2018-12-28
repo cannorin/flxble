@@ -5,6 +5,8 @@ open SyntaxTree
 
 type TemplateContext = Context.TemplateContext
 type Template = SyntaxTree.Template
+type ScriptObject = SyntaxTree.ScriptObject
+module ScriptExpr = SyntaxTree.ScriptExpr
 
 module TemplateContext =
   /// Creates a new `TemplateContext` with the `culture` and a function

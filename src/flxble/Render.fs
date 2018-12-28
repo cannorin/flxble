@@ -9,9 +9,11 @@ open Flxble.Models
 open Flxble.Context
 open Flxble.Templating
 open Flxble.Templating.SyntaxTree
-open Flxble.Templating.ScriptObject.Dsl
+open Flxble.Templating.ScriptObjectHelper
 open Markdig
 open System.Net
+
+let synchronousRenderCount = 50
 
 let rec private applyTemplateToHtml ctx renderCtx localVariables templateName html fileName =
   tryOperation ctx "applyTemplateToHtml" fileName <| fun () ->
@@ -63,14 +65,6 @@ let private generatePipeline ctx =
       |> customize
       |> fun x -> x.Build()
 
-let private convertIfMarkdown pipeline page =
-  if page.format = PageFormat.Markdown then
-    { page with
-        format = PageFormat.Html
-        content = Markdown.ToHtml(page.content, pipeline)
-    }
-  else page
-
 let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
   tryOperation ctx "renderPageToOutput" page.relativeLocation <| fun () ->
     if Directory.Exists ctx.OutputDir |> not then
@@ -80,10 +74,8 @@ let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
     match page.format with
       | PageFormat.Html
       | PageFormat.Markdown ->
-        let path =
-          Path.Combine(
-            ctx.OutputDir,
-            Path.ChangeExtension(page.relativeLocation, "html"))
+        let location = Path.ChangeExtension(page.relativeLocation, "html")
+        let path = Path.Combine(ctx.OutputDir, location)
 
         ctx.logger.trace "generating '%s'..." path
 
@@ -144,45 +136,45 @@ let private renderArchive archiveType tempName elements predicate title printer 
               ctx.config.Theme tempName)
     let pages =
       ctx.pages
-      |> Seq.choose (function
-        | { relativeLocation = l; metadata = Some meta;
-            format = PageFormat.Html | PageFormat.Markdown } as page ->
-          Some (Path.ChangeExtension(l, ".html"), meta, page)
-        | _ -> None)
+      |> Seq.filter (fun x ->
+          x.metadata.IsSome && (x.format = PageFormat.Html || x.format = PageFormat.Markdown))
+      |> Seq.map (fun x -> x.metadata.Value, x)
+      |> Seq.cache
     seq {
-      for element in elements do
+      for elementChunk in elements |> Seq.chunkBySize synchronousRenderCount do
         yield async {
-          let pagesObj = 
-            pages
-              |> Seq.filter (fun (_, x, _) -> predicate element x)
-              |> Seq.map    (fun (_, _, page) -> page |> ScriptObject.from)
-              |> ScriptObject.Array
+          for element in elementChunk do
+            let pagesObj = 
+              pages
+                |> Seq.filter (fun (x, _) -> predicate element x)
+                |> Seq.map    (fun (_, page) -> page |> ScriptObject.from)
+                |> ScriptObject.Array
 
-          let archiveObj =
-            [|
-              "pages", pagesObj
-              "title", ScriptObject.String (title element)
-              "archive_type",  ScriptObject.String archiveType
-            |] |> Map.ofArray
+            let archiveObj =
+              [|
+                "pages", pagesObj
+                "title", ScriptObject.String (title element)
+                "archive_type",  ScriptObject.String archiveType
+              |] |> Map.ofArray
 
-          let renderCtx = renderCtx |> TemplateContext.addMany archiveObj
-        
-          let outputDir = Path.Combine(ctx.OutputDir, outDir)
-
-          if Directory.Exists outputDir |> not then
-            ctx.logger.warning "the output directory '%s' does not exist, creating." outputDir
-            Directory.CreateDirectory(outputDir) |> ignore
-        
-          let outPath = Path.Combine(outputDir, sprintf "%s.html" <| printer element)
-          ctx.logger.trace "generating '%s'..." outPath
+            let renderCtx = renderCtx |> TemplateContext.addMany archiveObj
           
-          let html =
-            let h = tagTmp.template |> Template.renderToString renderCtx
-            match tagTmp.dependsOn with
-              | Some x -> applyTemplateToHtml ctx renderCtx Map.empty x h (sprintf "template: %s" x)
-              | None -> h
+            let outputDir = Path.Combine(ctx.OutputDir, outDir)
+
+            if Directory.Exists outputDir |> not then
+              ctx.logger.warning "the output directory '%s' does not exist, creating." outputDir
+              Directory.CreateDirectory(outputDir) |> ignore
           
-          File.WriteAllText(outPath, html)
+            let outPath = Path.Combine(outputDir, sprintf "%s.html" <| printer element)
+            ctx.logger.trace "generating '%s'..." outPath
+            
+            let html =
+              let h = tagTmp.template |> Template.renderToString renderCtx
+              match tagTmp.dependsOn with
+                | Some x -> applyTemplateToHtml ctx renderCtx Map.empty x h (sprintf "template: %s" x)
+                | None -> h
+            
+            File.WriteAllText(outPath, html)
         }
     }
 
@@ -224,7 +216,7 @@ let everything (ctx: Context) =
         yield! renderTagArchive ctx renderCtx
         yield! renderMonthlyArchive ctx renderCtx
 
-        for pageChunk in ctx.pages |> Seq.chunkBySize 50 do
+        for pageChunk in ctx.pages |> Seq.chunkBySize synchronousRenderCount do
         // for page in ctx.pages do
           yield async {
             for page in pageChunk do
@@ -238,6 +230,5 @@ let everything (ctx: Context) =
     match result with
       | Choice2Of2 exn -> reraise' exn
       | _ -> ()
-    ()
     
 

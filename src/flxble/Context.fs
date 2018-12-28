@@ -2,8 +2,7 @@ module Flxble.Context
 open Flxble.Configuration
 open Flxble.Models
 open Flxble.Templating
-open Flxble.Templating.SyntaxTree
-open Flxble.Templating.ScriptObject.Dsl
+open Flxble.Templating.ScriptObjectHelper
 open System
 open System.IO
 open System.Runtime.ExceptionServices
@@ -115,12 +114,14 @@ and Context = {
       |> Seq.filter (function
         | { metadata = Some md } when md.PageType = ty -> true
         | _ -> false)
+      |> Seq.cache
   
   member this.PagesOfTag tag =
     this.pages
       |> Seq.filter (function
         | { metadata = Some md } when md.Tags |> List.contains tag -> true
         | _ -> false)
+      |> Seq.cache
 
   member this.PagesOfMonth year month =
     this.pages
@@ -128,6 +129,7 @@ and Context = {
         | { metadata = Some md } ->
           md.Date |> Option.map (fun d -> d.Year = year && d.Month = month) ?| false
         | _ -> false)
+      |> Seq.cache
 
   member this.PrevNextPostFinder = this.Cache.PrevNextPostFinder.Value
 
@@ -173,6 +175,7 @@ module Context =
         format   = pageFormat
         metadata = metadata
         content  = content
+        scriptObjectMap = None
       }
 
   let inline private sortPagesAndCache ctx =
@@ -221,6 +224,7 @@ module Context =
         dependsOn = dependency
         metadata = metadata
         template = template
+        scriptObjectMap = None
       }
 
   /// loads the theme to the current context.

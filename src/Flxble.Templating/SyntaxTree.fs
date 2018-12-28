@@ -26,7 +26,7 @@ type ScriptObject =
   | Record  of Map<string, ScriptObject>
   | Function of argLength: int * StructuralFunction<ScriptObject seq, ScriptObject>
   /// Null value. Can also contain an error message as `EValue errorMessage`.
-  | Null of errorMessage:EqualityNull<string>
+  | Null of errorMessage:EqualityNull<Lazy<string>>
   with
     /// Converts the script object to a string with the given `culture`.
     /// Null value with an error message will be quoted using `commentize`.
@@ -44,7 +44,7 @@ type ScriptObject =
         | Function _ ->
           commentize <|
             sprintf "this object cannot be directly printed: %s" (to_s this)
-        | Null (EValue msg) -> commentize msg
+        | Null (EValue msg) -> commentize msg.Value
         | Null ENull -> ""
 
     /// Gets the type of the script object.
@@ -71,7 +71,7 @@ type ScriptObject =
       match this with
         | Record d ->
           d |> Map.tryFind name
-          ?| Null (EqualityNull <| sprintf "key not found: '%s'" name)
+          ?| Null (EqualityNull <| lazy (sprintf "key not found: '%s'" name))
         | Date d ->
           match name with
             | "year" -> Int d.Year
@@ -82,7 +82,7 @@ type ScriptObject =
             | "second" -> Int d.Second
             | "millisecond" -> Int d.Millisecond
             | _ ->
-              Null (EqualityNull <| sprintf "date does not support the key '%s'" name)
+              Null (EqualityNull <| lazy (sprintf "date does not support the key '%s'" name))
         | TimeSpan t ->
           match name with
             | "day" -> Int t.Days
@@ -91,9 +91,9 @@ type ScriptObject =
             | "second" -> Int t.Seconds
             | "millisecond" -> Int t.Milliseconds
             | _ ->
-              Null (EqualityNull <| sprintf "timespan does not support the key '%s'" name)
+              Null (EqualityNull <| lazy (sprintf "timespan does not support the key '%s'" name))
         | Null _ -> this
-        | _ -> Null (EqualityNull "not a record")
+        | _ -> Null (EqualityNull (lazy "not a record"))
 
     /// Gets a value at the given `index` of the script object.
     /// If it is not an array or the index is out of range,
@@ -106,12 +106,12 @@ type ScriptObject =
               xs |> Seq.tryItem index
             else
               xs |> Seq.rev |> Seq.tryItem (-index-1)
-          xs' ?| Null (EqualityNull "index out of range")
+          xs' ?| Null (EqualityNull (lazy "index out of range"))
         | String s ->
           s |> Seq.tryItem index |> Option.map (string >> String)
-          ?| Null (EqualityNull "index out of range")
+          ?| Null (EqualityNull (lazy "index out of range"))
         | Null _ -> this
-        | _ -> Null (EqualityNull "not an array")
+        | _ -> Null (EqualityNull (lazy "not an array"))
 
     /// Applies the script object to the given `args`.
     /// If it is not a function or raised an error,
@@ -132,7 +132,7 @@ type ScriptObject =
                 f.invoke (Seq.append args xs)
               Function (i', StructuralFunction f)
           | Null (EValue _) -> func
-          | _ -> Null (EqualityNull "not a function")
+          | _ -> Null (EqualityNull (lazy "not a function"))
       apply args this
 
 and [<Struct; StructuredFormatDisplay("{AsString}")>] ScriptInfo = {
@@ -183,14 +183,14 @@ type ScriptStatement =
 and Template = ScriptStatement list
 
 module ScriptExpr =
-  let inline private error info format =
+  let inline private errorFmt info format =
     Printf.kprintf (fun s ->
-      let msg =
-        match info with
-          | Some loc -> sprintf "%s (at %s)" s (to_s loc)
-          | None -> s
-      Null (EqualityNull msg)
+      match info with
+        | Some loc -> sprintf "%s (at %s)" s (to_s loc)
+        | None -> s
     ) format
+
+  let inline err msg = Null (EValue msg)
 
   /// Evaluates the given `expr` to a `ScripeObject` with the `context`.
   /// If there was an error, `Null (EValue errorMessage)` will be returned.
@@ -199,7 +199,7 @@ module ScriptExpr =
       | Literal l -> l
       | Variable v ->
         context |> Map.tryFind v
-        ?| error expr.info "the variable '%s' does not exist" v
+        ?| err (lazy (errorFmt expr.info "the variable '%s' does not exist" v))
       | Lambda (vars, body) ->
         let f xs =
           let ctx =
@@ -224,10 +224,10 @@ module ScriptExpr =
               m <- m |> Map.add k (eval context v)
             Record m
           | Null (EValue _)  as x -> x
-          | _ -> error expr.info "not a record"
+          | _ -> err <| lazy (errorFmt expr.info "not a record")
       | MemberAccess (name, e) ->
         match (eval context e).[name] with
-          | Null (EValue msg) -> error expr.info "%s" msg
+          | Null (EValue msg) -> msg |> Lazy.map (errorFmt expr.info "%s") |> err
           | x -> x
       | IndexerAccess (index, e) ->
         let value =
@@ -235,9 +235,9 @@ module ScriptExpr =
             | Int i -> (eval context e).[i]
             | String s -> (eval context e).[s]
             | Null (EValue _) as e -> e 
-            | _ -> Null (EValue "not an index(int) or a field(string)")
+            | _ -> Null (EValue (lazy "not an index(int) or a field(string)"))
         match value with
-          | Null (EValue msg) -> error expr.info "%s" msg
+          | Null (EValue msg) -> msg |> Lazy.map (errorFmt expr.info "%s") |> err
           | x -> x
 
       | If (cond, a, b) ->
@@ -259,5 +259,5 @@ module ScriptExpr =
       | Application (func, args) ->
         let func = eval context func
         match func.Invoke (args |> Seq.map (eval context) |> Seq.cache) with
-          | Null (EValue msg) -> error expr.info "%s" msg
+          | Null (EValue msg) -> msg |> Lazy.map (errorFmt expr.info "%s") |> err
           | x -> x

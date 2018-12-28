@@ -27,7 +27,6 @@ type PageFormat =
   /// will be copied as-is.
   | Other
 
-[<Struct>]
 type PageInfo = {
   /// location of the file relative to ${source}.
   relativeLocation: string 
@@ -35,6 +34,7 @@ type PageInfo = {
   format: PageFormat
   metadata: PageMetaData option
   content: string
+  mutable scriptObjectMap: Map<string, ScriptObject> option
 } with
   member this.PageType =
     match this.metadata |> Option.map (fun x -> x.PageType) with
@@ -43,23 +43,34 @@ type PageInfo = {
       | None -> PageType.None
       | Some str -> PageType.Other str
   member this.ToScriptObjectMap() =
-    let location =
-      match this.format with
-        | PageFormat.Markdown -> Path.ChangeExtension(this.relativeLocation, "html")
-        | _ -> this.relativeLocation
-    let map =
-      this.metadata |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
-    map |> Map.add "location" (SyntaxTree.ScriptObject.String location)
+    match this.scriptObjectMap with
+      | Some x -> x
+      | None ->
+        let location =
+          match this.format with
+            | PageFormat.Markdown -> Path.ChangeExtension(this.relativeLocation, "html")
+            | _ -> this.relativeLocation
+        let map =
+          this.metadata
+          |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
+          |> Map.add "location" (SyntaxTree.ScriptObject.String location)
+        this.scriptObjectMap <- Some map
+        map
 
-[<Struct>]
 type TemplateInfo = {
   name: string
   dependsOn: string option
   metadata: PageMetaData option
   template: Template
+  mutable scriptObjectMap: Map<string, ScriptObject> option
 } with
   member this.ToScriptObjectMap() = 
-    let map =
-      this.metadata |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
-    map |> Map.add "template_name" (SyntaxTree.ScriptObject.String this.name)
-
+    match this.scriptObjectMap with
+      | Some x -> x
+      | None ->
+        let map =
+          this.metadata
+          |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
+          |> Map.add "template_name" (SyntaxTree.ScriptObject.String this.name)
+        this.scriptObjectMap <- Some map
+        map

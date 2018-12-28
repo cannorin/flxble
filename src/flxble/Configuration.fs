@@ -2,22 +2,21 @@ module Flxble.Configuration
 open Flxble.Toml
 open Flxble.Toml.LensLike
 open Flxble.Templating
-open Flxble.Templating.SyntaxTree
 open System
 
 let rec private convert = function
-  | TomlValue.Bool b -> Bool b
-  | TomlValue.Int  i -> Int  i
-  | TomlValue.Float f -> Float f
+  | TomlValue.Bool b -> ScriptObject.Bool b
+  | TomlValue.Int  i -> ScriptObject.Int  i
+  | TomlValue.Float f -> ScriptObject.Float f
   | TomlValue.String s -> ScriptObject.String s
-  | TomlValue.Date d -> Date d
+  | TomlValue.Date d -> ScriptObject.Date d
   | TomlValue.Array nodes -> convert' nodes
 and private convert' = function
-  | NodeArray.Bools xs    -> xs |> List.map Bool  |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Ints xs     -> xs |> List.map Int   |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Floats xs   -> xs |> List.map Float |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Bools xs    -> xs |> List.map ScriptObject.Bool  |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Ints xs     -> xs |> List.map ScriptObject.Int   |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Floats xs   -> xs |> List.map ScriptObject.Float |> List.toSeq |> ScriptObject.Array
   | NodeArray.Strings xs  -> xs |> List.map ScriptObject.String  |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Dates xs    -> xs |> List.map Date  |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Dates xs    -> xs |> List.map ScriptObject.Date  |> List.toSeq |> ScriptObject.Array
   | NodeArray.Arrays xs   -> xs |> List.map convert' |> List.toSeq |> ScriptObject.Array
 
 type TomlDocument with

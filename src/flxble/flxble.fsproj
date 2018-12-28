@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>netcoreapp2.2; net472</TargetFrameworks>
-    <OutputPath>../../bin</OutputPath>
+    <OutputPath>../../bin/$(Configuration)</OutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.2' ">
     <Product>flxble</Product>

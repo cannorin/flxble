@@ -126,6 +126,7 @@ let inline defaultBindings (culture: CultureInfo) =
     // null check
     yield "is_null", fn 1 (function [Null _] -> Bool true | _ -> Bool false)
     yield "is_not_null", fn 1 (function [Null _] -> Bool false | _ -> Bool true)
+    yield "?|", fn 2 (function [Null _; x] | [x; _] -> x | xs -> err 2 "?|" xs)
 
     // logical
     yield "||", fnlazy 2 (fun xs ->

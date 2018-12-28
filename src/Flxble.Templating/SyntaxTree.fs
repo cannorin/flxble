@@ -245,17 +245,21 @@ module ScriptExpr =
           | Null _ | Bool false -> eval context b
           | _ -> eval context a
       
-      // pipeline optimizations
+      // operator optimizations
       | Application (Item (Variable "|>"), [x; f])
       | Application (Item (Variable "<|"), [f; x]) ->
         Application (f, [x]) |> With.sameInfoOf expr |> eval context
       | Application (Item (Variable "||>"), [Item (ArrayNew xs); f])
       | Application (Item (Variable "<||"), [f; Item (ArrayNew xs)]) ->
         Application (f, xs) |> With.sameInfoOf expr |> eval context
-
+      | Application (Item (Variable "?|"), [x; y]) ->
+        match eval context x with
+          | Null _ -> eval context y
+          | x -> x
+      
       | Application (Item (Application (f, xs)), ys) ->
         Application (f, xs @ ys) |> With.sameInfoOf expr |> eval context
-      
+     
       | Application (func, args) ->
         let func = eval context func
         match func.Invoke (args |> Seq.map (eval context) |> Seq.cache) with

@@ -1,4 +1,6 @@
-%% def title = title ?| config.title
+%% def title = \
+  if is_null title then config.title \
+  else title + " - " + config.title
 %% def description = description ?| config.description
 
 <!DOCTYPE html>

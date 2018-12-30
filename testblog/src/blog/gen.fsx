@@ -6,7 +6,7 @@ let template = sprintf """
   title = "Example Post %i"
   type  = "post"
   description = "This is an example post."
-  date = 20%02i-%02i-%02iT00:00:00Z
+  post_date   = 20%02i-%02i-%02iT00:00:00Z
   tags = [ %s ]
 ---
 

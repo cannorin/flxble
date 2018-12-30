@@ -124,12 +124,12 @@ type ScriptObject =
           | Function (i, f) ->
             if i <= arglen then
               let args' = args |> Seq.take i
-              f.invoke args'
+              f.Invoke args'
               |> apply (args |> Seq.skip i)
             else
               let i' = i - arglen
               let f xs =
-                f.invoke (Seq.append args xs)
+                f.Invoke (Seq.append args xs)
               Function (i', StructuralFunction f)
           | Null (EValue _) -> func
           | _ -> Null (EqualityNull (lazy "not a function"))
@@ -186,8 +186,8 @@ module ScriptExpr =
   let inline private errorFmt info format =
     Printf.kprintf (fun s ->
       match info with
-        | Some loc -> sprintf "%s (at %s)" s (to_s loc)
-        | None -> s
+        | ValueSome loc -> sprintf "%s (at %s)" s (to_s loc)
+        | ValueNone -> s
     ) format
 
   let inline err msg = Null (EValue msg)
@@ -198,8 +198,10 @@ module ScriptExpr =
     match expr.item with
       | Literal l -> l
       | Variable v ->
-        context |> Map.tryFind v
-        ?| err (lazy (errorFmt expr.info "the variable '%s' does not exist" v))
+        context
+        |> Map.tryFind' v
+        |> ValueOption.defaultValue (
+          err (lazy (errorFmt expr.info "the variable '%s' does not exist" v)))
       | Lambda (vars, body) ->
         let f xs =
           let ctx =
@@ -212,17 +214,14 @@ module ScriptExpr =
       | ArrayNew xs ->
         Array (xs |> Seq.map (eval context) |> Seq.cache)
       | RecordNew xs ->
-        let mutable m = Map.empty
-        for k, v in xs do
-          m <- m |> Map.add k (eval context v)
-        Record m
+        xs |> Seq.map (Tuple.map2 id (eval context))
+           |> Map.ofSeq
+           |> Record
       | RecordWith (orig, xs) ->
         match eval context orig with
           | Record m ->
-            let mutable m = m
-            for k, v in xs do
-              m <- m |> Map.add k (eval context v)
-            Record m
+            xs |> Seq.fold (fun m (k, v) -> m |> Map.add k (eval context v)) m
+               |> Record  
           | Null (EValue _)  as x -> x
           | _ -> err <| lazy (errorFmt expr.info "not a record")
       | MemberAccess (name, e) ->

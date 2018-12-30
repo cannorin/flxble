@@ -187,9 +187,9 @@ let inline expr (sc: #sc<_>) = recursive <| fun expr ->
       (fun prefix remOpChars expr1 expr2 ->
         let info =
           match expr1.info, expr2.info with
-            | Some i, Some j ->
-              { location = i.location + j.location } |> Some
-            | _, _ -> None
+            | ValueSome i, ValueSome j ->
+              { location = i.location + j.location } |> ValueSome
+            | _, _ -> ValueNone
         {
           item = Application(Variable (prefix + remOpChars) |> With.noInfo, [expr1; expr2])
           info = info

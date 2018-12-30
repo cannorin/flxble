@@ -1,0 +1,43 @@
+%% def title = \
+  if is_null title then config.title \
+  else title + " - " + config.title
+%% def description = description ?| config.description
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>
+    {{ title }}
+  </title>
+  <meta name="description" content="{{ string.html_escape description }}" />
+
+  <meta name="HandheldFriendly" content="True" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="alternate" href="{{config.base_url}}/rss.xml" title="{{config.title}}" type="application/rss+xml">
+  <link rel="shortcut icon" href="{{config.base_url}}/favicon.png">
+
+  <link rel="stylesheet" type="text/css" href="{{config.base_url}}/css/screen.css" />
+  <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Merriweather:300,700,700italic,300italic|Open+Sans:700,400" />
+
+  <script type="text/javascript" src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</head>
+
+%% def body_class = body_class ?| ""
+<body class="{{body_class}}">
+  <header class="default-header">
+    <nav class="main-nav clearfix">
+      <a class="nav-item" href="{{config.base_url}}/index.html">Home</a>
+      %% when is_not_null config.tag do
+      <a class="nav-item" href="{{config.base_url}}/{{config.tag}}/index.html">Tags</a>
+      %% end
+      %% when is_not_null config.archive do
+      <a class="nav-item" href="{{config.base_url}}/{{config.archive}}/index.html">Archive</a>
+      %% end
+    </nav>
+  </header>
+  {{content}}
+</body>
+
+</html>

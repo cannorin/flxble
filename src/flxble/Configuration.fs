@@ -92,7 +92,7 @@ type PageMetaData(toml: TomlDocument) =
   new (str: string) = new PageMetaData(TomlDocument.parse str)
   member val PageType = toml%.ofString@?"type" ?| "none"
   member val Title = toml%.ofString@?"title" ?| ""
-  member val Date = toml%.ofDate@?"date"
+  member val Date = toml%.ofDate@?"post_date"
   member val Tags = toml%.ofArray%.ofString@?"tags" ?| []
   member val Description = toml%.ofString@?"description" ?| ""
   member val RawTomlDocument = toml
@@ -111,7 +111,7 @@ title  = ""Test Blog Post!""
 description = ""this is an example of a page metadata section.""
 
 # Required for blog posts (type = ""post"")
-date   = 1979-05-27T07:32:00-08:00 # offset date-time is only allowed!
+post_date   = 1979-05-27T07:32:00-08:00 # offset date-time is only allowed!
 tags   = [ 'test', 'blog', 'example' ]
 "
 
@@ -146,7 +146,7 @@ tags = []
       let metadata =
         metaBlock |> String.concat Environment.NewLine |> PageMetaData
       let remainingText =
-        lines |> Seq.skip (length + 2) |> String.concat Environment.NewLine
-      Some metadata, remainingText
+        lines |> Seq.skip (length + 3) |> String.concat Environment.NewLine
+      ValueSome metadata, remainingText
     else
-      None, str
+      ValueNone, str

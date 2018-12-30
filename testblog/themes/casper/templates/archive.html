@@ -24,19 +24,6 @@
           </section>
           %% end
           <footer class="post-meta">
-            %% when is_not_null page.post_date do
-            %% def date_iso8601 = page.post_date |> date.to_string "o"
-            <time class="post-date" datetime="{{date_iso8601}}">
-              %% when is_not_null config.archive do
-                <a href="{{config.base_url}}/{{config.archive}}/{{page.post_date.year}}-{{page.post_date.month}}.html">
-                {{ page.post_date |> date.to_string "MMM d yyy" }}
-                </a>
-              %% otherwise
-                {{ page.post_date |> date.to_string "MMM d yyy" }}
-              %% end
-              &nbsp;
-            </time>
-            %% end
             <span class="post-tags">
               Tags:
               %% for tag in page.tags do
@@ -47,6 +34,18 @@
                 %% end
               %% end
             </span>
+            %% when is_not_null page.post_date do
+            %% def date_iso8601 = page.post_date |> date.to_string "o"
+            <time class="post-date" datetime="{{date_iso8601}}">
+              %% when is_not_null config.archive do
+                <a href="{{config.base_url}}/{{config.archive}}/{{page.post_date.year}}-{{page.post_date.month}}.html">
+                {{ page.post_date |> date.to_string "MMM d yyy" }}
+                </a>
+              %% otherwise
+                {{ page.post_date |> date.to_string "MMM d yyy" }}
+              %% end
+            </time>
+            %% end
           </footer>
         </article>
       %% end

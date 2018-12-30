@@ -37,9 +37,9 @@ let rec private applyTemplateToHtml ctx renderCtx localVariables templateName ht
       tmpInfo.template |> Template.renderToString rctx
     
     match tmpInfo.dependsOn with
-      | Some tmpName ->
+      | ValueSome tmpName ->
         applyTemplateToHtml ctx renderCtx localVariables tmpName html' fileName
-      | None -> html'
+      | ValueNone -> html'
 
 type mpb = MarkdownPipelineBuilder
 
@@ -83,8 +83,8 @@ let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
 
         let prevnextObjs = seq {
           match page.metadata with
-            | None -> ()
-            | Some mt ->
+            | ValueNone -> ()
+            | ValueSome mt ->
               let prev, next = prevnextfinder mt.PageType page
               match prev with
                 | Some x -> yield "prev_date_page", ScriptObject.from x
@@ -109,7 +109,7 @@ let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
 
         let html =
           match page.metadata with
-            | Some mt when mt.PageType <> "none" ->
+            | ValueSome mt when mt.PageType <> "none" ->
               applyTemplateToHtml ctx renderCtx Map.empty mt.PageType content page.absoluteLocation
             | _ -> content
 
@@ -138,7 +138,7 @@ let private renderArchive archiveType tempName elements predicate title printer 
       ctx.pages
       |> Seq.filter (fun x ->
           x.metadata.IsSome && (x.format = PageFormat.Html || x.format = PageFormat.Markdown))
-      |> Seq.map (fun x -> x.metadata.Value, x)
+      |> Seq.map (fun x -> x.metadata.Value, x |> ScriptObject.from)
       |> Seq.cache
     seq {
       for elementChunk in elements |> Seq.chunkBySize synchronousRenderCount do
@@ -147,7 +147,7 @@ let private renderArchive archiveType tempName elements predicate title printer 
             let pagesObj = 
               pages
                 |> Seq.filter (fun (x, _) -> predicate element x)
-                |> Seq.map    (fun (_, page) -> page |> ScriptObject.from)
+                |> Seq.map    snd
                 |> ScriptObject.Array
 
             let archiveObj =
@@ -171,8 +171,8 @@ let private renderArchive archiveType tempName elements predicate title printer 
             let html =
               let h = tagTmp.template |> Template.renderToString renderCtx
               match tagTmp.dependsOn with
-                | Some x -> applyTemplateToHtml ctx renderCtx Map.empty x h (sprintf "template: %s" x)
-                | None -> h
+                | ValueSome x -> applyTemplateToHtml ctx renderCtx Map.empty x h (sprintf "template: %s" x)
+                | ValueNone -> h
             
             File.WriteAllText(outPath, html)
         }
@@ -201,6 +201,28 @@ let private renderMonthlyArchive (ctx: Context) sobj =
       dir ctx sobj)
   ?| Seq.empty
 
+let private copyContent (ctx: Context) =
+  let srcContent =
+    Path.combine ctx.ConfigDir ctx.config.ContentDir
+  let themeContent =
+    Path.combineMany [|
+      ctx.ConfigDir;
+      ctx.config.ThemesDir;
+      ctx.config.Theme;
+      "content"
+    |]
+  let inline doCopy content =
+    if Directory.Exists content then
+      for file in Directory.enumerateFilesRecursively false content do
+        let outPath =
+          file |> Path.makeRelativeTo content |> Path.combine ctx.OutputDir
+        let outDir = outPath |> Path.GetDirectoryName
+        if Directory.Exists outDir |> not then
+          Directory.CreateDirectory outDir |> ignore
+        File.Copy(file, outPath, true)
+  doCopy srcContent
+  doCopy themeContent
+
 /// Render everything in the current context.
 let everything (ctx: Context) =
   tryOperation ctx "Render.everything" "current context" <| fun () ->
@@ -215,6 +237,7 @@ let everything (ctx: Context) =
       seq {
         yield! renderTagArchive ctx renderCtx
         yield! renderMonthlyArchive ctx renderCtx
+        yield async { copyContent ctx }
 
         for pageChunk in ctx.pages |> Seq.chunkBySize synchronousRenderCount do
         // for page in ctx.pages do
@@ -223,9 +246,9 @@ let everything (ctx: Context) =
               ctx.logger.trace "processing file '%s'..." page.absoluteLocation
               renderPageToOutput ctx renderCtx pipeline prevnextfinder page
           }
-      } |> Async.Parallel
-        |> Async.Catch
-        |> Async.RunSynchronously
+       } |> Async.Parallel
+         |> Async.Catch
+         |> Async.RunSynchronously
 
     match result with
       | Choice2Of2 exn -> reraise' exn

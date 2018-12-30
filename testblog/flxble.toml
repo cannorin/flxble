@@ -1,7 +1,7 @@
 # Required
 base_url = '/home/alice/codes/flxble/testblog/output'
 title = "flxble"
-theme = "minimal"
+theme = "casper"
 
 # Optional, will be empty by default
 subtitle = "Fast Lightweight eXtensible BLog Engine"

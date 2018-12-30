@@ -32,45 +32,47 @@ type PageInfo = {
   relativeLocation: string 
   absoluteLocation: string
   format: PageFormat
-  metadata: PageMetaData option
+  metadata: PageMetaData voption
   content: string
-  mutable scriptObjectMap: Map<string, ScriptObject> option
+  mutable scriptObjectMap: Map<string, ScriptObject> voption
 } with
   member this.PageType =
-    match this.metadata |> Option.map (fun x -> x.PageType) with
-      | Some "post" -> PageType.Post
-      | Some "none"
-      | None -> PageType.None
-      | Some str -> PageType.Other str
+    match this.metadata |> ValueOption.map (fun x -> x.PageType) with
+      | ValueSome "post" -> PageType.Post
+      | ValueSome "none"
+      | ValueNone -> PageType.None
+      | ValueSome str -> PageType.Other str
   member this.ToScriptObjectMap() =
     match this.scriptObjectMap with
-      | Some x -> x
-      | None ->
+      | ValueSome x -> x
+      | ValueNone ->
         let location =
           match this.format with
             | PageFormat.Markdown -> Path.ChangeExtension(this.relativeLocation, "html")
             | _ -> this.relativeLocation
         let map =
           this.metadata
-          |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
+          |> ValueOption.map (fun x -> x.ToScriptObjectMap())
+          |> ValueOption.defaultValue Map.empty
           |> Map.add "location" (SyntaxTree.ScriptObject.String location)
-        this.scriptObjectMap <- Some map
+        this.scriptObjectMap <- ValueSome map
         map
 
 type TemplateInfo = {
   name: string
-  dependsOn: string option
-  metadata: PageMetaData option
+  dependsOn: string voption
+  metadata: PageMetaData voption
   template: Template
-  mutable scriptObjectMap: Map<string, ScriptObject> option
+  mutable scriptObjectMap: Map<string, ScriptObject> voption
 } with
   member this.ToScriptObjectMap() = 
     match this.scriptObjectMap with
-      | Some x -> x
-      | None ->
+      | ValueSome x -> x
+      | ValueNone ->
         let map =
           this.metadata
-          |> Option.map (fun x -> x.ToScriptObjectMap()) ?| Map.empty
+          |> ValueOption.map (fun x -> x.ToScriptObjectMap()) 
+          |> ValueOption.defaultValue Map.empty
           |> Map.add "template_name" (SyntaxTree.ScriptObject.String this.name)
-        this.scriptObjectMap <- Some map
+        this.scriptObjectMap <- ValueSome map
         map

@@ -86,8 +86,8 @@ module Template =
               | _ ->
                 let loc =
                   match record.info with
-                    | Some i -> sprintf " (at %s)" (to_s i.location)
-                    | None -> ""
+                    | ValueSome i -> sprintf " (at %s)" (to_s i.location)
+                    | ValueNone -> ""
                 loc |> sprintf "open failed, not a record%s"
                     |> ctx.commentize
                     |> writer.Write
@@ -110,7 +110,7 @@ module Template =
                   exec (ctx |> TemplateContext.add var x) next
               | Record m ->
                 for KVP(k, v) in m do
-                  let kvp = Map.ofSeq ["key", String k; "value", v] |> Record
+                  let kvp = Map.ofList ["key", String k; "value", v] |> Record
                   exec (ctx |> TemplateContext.add var kvp) next
               | _ -> ()
             exec ctx rest

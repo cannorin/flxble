@@ -20,6 +20,16 @@
         </section>
         %% end
         <footer class="post-meta">
+          <span class="post-tags">
+            Tags:
+            %% for tag in page.tags do
+              %% when is_not_null config.tag do
+                <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
+              %% otherwise
+                <span class="tag-name">{{ tag }}</span>
+              %% end
+            %% end
+          </span>
           %% when is_not_null page.post_date do
             %% def date_iso8601 = page.post_date |> date.to_string "o"
           <time class="post-date" datetime="{{date_iso8601}}">
@@ -31,18 +41,7 @@
                 {{ page.post_date |> date.to_string "MMM d yyy" }}
             %% end
           </time>
-          &nbsp;
           %% end
-          <span class="post-tags">
-            Tags:
-            %% for tag in page.tags do
-              %% when is_not_null config.tag do
-                <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
-              %% otherwise
-                <span class="tag-name">{{ tag }}</span>
-              %% end
-            %% end
-          </span>
         </footer>
       </article>
     %% end

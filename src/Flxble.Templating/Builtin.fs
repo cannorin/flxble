@@ -114,7 +114,7 @@ let inline takelike f name =
   name, fn 2 (function [Int len; String s] -> f len s |> String | xs -> err 2 name xs)
 
 let inline defaultBindings (culture: CultureInfo) =
-  Map.ofSeq <| seq {
+  Map.ofArray [|
     // comparison
     yield "=",  fn 2 (function [a;b] -> a = b |> Bool | xs -> err 2 "=" xs)
     yield "<>", fn 2 (function [a;b] -> a <> b |> Bool | xs -> err 2 "=" xs)
@@ -499,4 +499,4 @@ let inline defaultBindings (culture: CultureInfo) =
         | xs -> err 1 "print" xs
       )
     }
-  }
+  |]

@@ -24,14 +24,14 @@ type ContextHelperCache(this: Context) =
   member val Tags =
     lazy (
       this.pages
-        |> Seq.collect (function { metadata = Some md } -> md.Tags | _ -> [])
+        |> Seq.collect (function { metadata = ValueSome md } -> md.Tags | _ -> [])
         |> Seq.distinct
     )
   member val Months =
     lazy (
       this.pages  
         |> Seq.choose (function
-          | { metadata = Some md } ->
+          | { metadata = ValueSome md } ->
             md.Date |> Option.map (fun x -> new DateTime(x.Year, x.Month, 1))
           | _ -> None)
         |> Seq.distinct
@@ -46,12 +46,12 @@ type ContextHelperCache(this: Context) =
         let posts =
           posts |> Seq.filter (fun x -> x.metadata.Value.PageType = pageType)
         function
-          | { metadata = None; relativeLocation = _ } -> None, None
-          | { metadata = Some md } ->
+          | { metadata = ValueNone; relativeLocation = _ } -> None, None
+          | { metadata = ValueSome md } ->
             let date = md.Date
             match posts |> Seq.tryFindIndex (fun x -> x.metadata.Value.Date = date) with
               | None -> None, None
-              | Some i -> posts |> Seq.tryItem (i-1), posts |> Seq.tryItem (i+1)
+              | Some i -> posts |> Seq.tryItem (i+1), posts |> Seq.tryItem (i-1)
     )
   member val AsScriptObjectMap =
     lazy (
@@ -112,21 +112,21 @@ and Context = {
   member this.PagesOfType ty =
     this.pages
       |> Seq.filter (function
-        | { metadata = Some md } when md.PageType = ty -> true
+        | { metadata = ValueSome md } when md.PageType = ty -> true
         | _ -> false)
       |> Seq.cache
   
   member this.PagesOfTag tag =
     this.pages
       |> Seq.filter (function
-        | { metadata = Some md } when md.Tags |> List.contains tag -> true
+        | { metadata = ValueSome md } when md.Tags |> List.contains tag -> true
         | _ -> false)
       |> Seq.cache
 
   member this.PagesOfMonth year month =
     this.pages
       |> Seq.filter (function
-        | { metadata = Some md } ->
+        | { metadata = ValueSome md } ->
           md.Date |> Option.map (fun d -> d.Year = year && d.Month = month) ?| false
         | _ -> false)
       |> Seq.cache
@@ -175,7 +175,7 @@ module Context =
         format   = pageFormat
         metadata = metadata
         content  = content
-        scriptObjectMap = None
+        scriptObjectMap = ValueNone
       }
 
   let inline private sortPagesAndCache ctx =
@@ -186,10 +186,10 @@ module Context =
             |> Seq.sortByDescending (
               fun x ->
                 match x.metadata with
-                  | Some md -> md.Date
-                  | None -> None
+                  | ValueSome md -> md.Date
+                  | ValueNone -> None
               )
-            |> Seq.cache
+            |> Seq.toArray
     }
 
   let inline private clearCache ctx = { ctx with cache = None }
@@ -221,10 +221,10 @@ module Context =
       let name = Path.GetFileNameWithoutExtension absPath
       name, {
         name = name
-        dependsOn = dependency
-        metadata = metadata
+        dependsOn = dependency |> ValueOption.ofOption
+        metadata = metadata |> ValueOption.ofOption
         template = template
-        scriptObjectMap = None
+        scriptObjectMap = ValueNone
       }
 
   /// loads the theme to the current context.

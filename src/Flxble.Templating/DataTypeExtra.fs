@@ -26,9 +26,9 @@ open System
 /// Can be used within datatypes without losing structural equality and comparison.
 [<CustomEquality; CustomComparison; StructuredFormatDisplay("{AsString}"); Struct>]
 type StructuralFunction<'a, 'b> =
-  val invoke: 'a -> 'b
   val guid: Guid
-  val private str: string;
+  val str: string
+  val invoke: 'a -> 'b
   
   new (f, guid) =
     { invoke = f; guid = guid;
@@ -39,7 +39,7 @@ type StructuralFunction<'a, 'b> =
     let hashcode = Guid.NewGuid()
     StructuralFunction(f, hashcode)
   
-  member this.AsString = this.str
+  member inline this.AsString = this.str
   member inline this.Invoke x = this.invoke x
   override this.ToString() = this.AsString
   override x.Equals yo =
@@ -55,7 +55,7 @@ type StructuralFunction<'a, 'b> =
 
 /// Value of which equality completely ignored.
 /// Any value of this type will be treated as equal.
-[<CustomEquality; CustomComparison; StructuredFormatDisplay("{AsString}"); Struct>]
+[<CustomEquality; CustomComparison; StructuredFormatDisplay("{AsString}")>]
 type EqualityNull<'T> =
   | EValue of 'T
   | ENull
@@ -88,16 +88,15 @@ module EqualityNull =
   let inline ofOption o = match o with Some x -> EValue x | None -> ENull
 
 type EqualityNull<'T> with
-  static member inline (>>=) (x, f) = EqualityNull.bind f x
+  static member inline (>>=) (x, f) = match x with EValue v -> f v | ENull -> ENull
   static member inline Return x = EValue x
-  static member inline Map (x, f) = EqualityNull.map f x
+  static member inline Map (x, f) = match x with EValue v -> EValue (f v) | ENull -> ENull
   static member inline Zero = ENull
 
 /// Wrapper type to help creating a discremated union with
 /// a shared property (`info`) among the cases.
-[<Struct>]
 type With<'Info, 'Item> =
-  { item: 'Item; info: 'Info option }
+  { item: 'Item; info: 'Info voption }
   override x.ToString() = to_s x.item
 
 module With =
@@ -105,11 +104,11 @@ module With =
   let inline infoOf x = x.info
   let inline bind f x : With<_, _> = f x.item
   let inline map f x = { item = f x.item; info = x.info }
-  let inline mapInfo f x = { item = x.item; info = Option.map f x.info }
-  let inline bimap f g x = { item = f x.item; info = Option.map g x.info }
+  let inline mapInfo f x = { item = x.item; info = ValueOption.map f x.info }
+  let inline bimap f g x = { item = f x.item; info = ValueOption.map g x.info }
   let inline sameInfoOf orig x = { item = x; info = orig.info }
-  let inline info i x = { item = x; info = Some i }
-  let inline noInfo x = { item = x; info = None }
+  let inline info i x = { item = x; info = ValueSome i }
+  let inline noInfo x = { item = x; info = ValueNone }
 
 type With<'T, 'U> with
   static member inline Bimap (x, f, g) = With.bimap f g x

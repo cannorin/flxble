@@ -9,6 +9,7 @@ description = '''
 "flxble" stands for Fast Lightweight eXtensible BLog Engine.
 It's written in F#, and powered by Markdig markdown processor
 and scriban template engine.'''
+copyright = "Copyright 2018 cannorin. All rights reserved. Available under Apache 2.0 license."
 
 # Optional, will be this value by default
 lang    = "en-us"

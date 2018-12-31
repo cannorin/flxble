@@ -273,7 +273,7 @@ let template : parser<Template> = recursive <| fun statements ->
   let whenStatement =
     clause "when <condition> do" whenClause
     .>>. statements
-    .>>. opt (clause "otherwise" otherwiseClause >>. statements)
+    .>>. opt' (clause "otherwise" otherwiseClause >>. statements)
     .>>  clause "end" endClause
     |>> fun ((cond, exec), otherwise) ->
       When(cond, exec, otherwise)

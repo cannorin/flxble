@@ -46,12 +46,12 @@ type ContextHelperCache(this: Context) =
         let posts =
           posts |> Seq.filter (fun x -> x.metadata.Value.PageType = pageType)
         function
-          | { metadata = ValueNone; relativeLocation = _ } -> None, None
+          | { metadata = ValueNone; relativeLocation = _ } -> ValueNone, ValueNone
           | { metadata = ValueSome md } ->
             let date = md.Date
-            match posts |> Seq.tryFindIndex (fun x -> x.metadata.Value.Date = date) with
-              | None -> None, None
-              | Some i -> posts |> Seq.tryItem (i+1), posts |> Seq.tryItem (i-1)
+            match posts |> Seq.tryFindIndex' (fun x -> x.metadata.Value.Date = date) with
+              | ValueNone -> ValueNone, ValueNone
+              | ValueSome i -> posts |> Seq.tryItem' (i+1), posts |> Seq.tryItem' (i-1)
     )
   member val AsScriptObjectMap =
     lazy (

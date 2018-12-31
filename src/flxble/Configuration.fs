@@ -36,6 +36,7 @@ type BlogConfig(toml: TomlDocument) =
 
   member val Subtitle = toml%.ofString@?"subtitle" ?| ""
   member val Description = toml%.ofString@?"description" ?| ""
+  member val Copyright = toml%.ofString@?"copyright"
   
   member val Language = toml%.ofString@?"lang" ?| "en-us"
   member val SourceDir = toml%.ofString@?"source" ?| "src/"

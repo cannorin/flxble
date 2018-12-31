@@ -96,12 +96,11 @@ module Template =
             exec ctx scr
             exec ctx rest
           | When (cond, a, b) ->
-            let next =
-              match eval ctx.bindings cond with
-                | Null _
-                | Bool false -> b
-                | _ -> Some a
-            next |> Option.iter (exec ctx)
+            match eval ctx.bindings cond with
+              | Null _
+              | Bool false ->
+                if b.IsSome then exec ctx b.Value
+              | _ -> exec ctx a
             exec ctx rest
           | For (var, xs, next) ->
             match eval ctx.bindings xs with

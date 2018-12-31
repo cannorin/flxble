@@ -19,8 +19,8 @@ let rec private applyTemplateToHtml ctx renderCtx localVariables templateName ht
   tryOperation ctx "applyTemplateToHtml" fileName <| fun () ->
     let tmpInfo =
       ctx.templates
-        |> Map.tryFind templateName
-        |> Option.defaultWith (
+        |> Map.tryFind' templateName
+        |> ValueOption.defaultWith (
           fun () ->
             ctx.logger.fail
               "the specified template '%s' does not exist"
@@ -87,11 +87,11 @@ let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
             | ValueSome mt ->
               let prev, next = prevnextfinder mt.PageType page
               match prev with
-                | Some x -> yield "prev_date_page", ScriptObject.from x
-                | None -> ()
+                | ValueSome x -> yield "prev_date_page", ScriptObject.from x
+                | ValueNone -> ()
               match next with
-                | Some x -> yield "next_date_page", ScriptObject.from x
-                | None -> ()
+                | ValueSome x -> yield "next_date_page", ScriptObject.from x
+                | ValueNone -> ()
         }
 
         let renderCtx = 
@@ -130,8 +130,8 @@ let private renderArchive archiveType tempName elements predicate title printer 
   tryOperation ctx (sprintf "renderArchive: %s" archiveType) "current context" <| fun () ->
     let tagTmp =
       ctx.templates
-        |> Map.tryFind tempName
-        |> Option.defaultWith (fun () ->
+        |> Map.tryFind' tempName
+        |> ValueOption.defaultWith (fun () ->
             ctx.logger.fail "the theme '%s' does not have the '%s' template."
               ctx.config.Theme tempName)
     let pages =
@@ -223,6 +223,51 @@ let private copyContent (ctx: Context) =
   doCopy srcContent
   doCopy themeContent
 
+open System.Xml
+let private generateRssFeed (ctx: Context) =
+  let inline writeElementStringAsync name value (writer: XmlWriter) =
+    writer.WriteElementStringAsync("", name, "", value)
+  let inline writeStartElementAsync name (writer: XmlWriter) =
+    writer.WriteStartElementAsync("", name, "")
+  
+  async {
+    let rssLocation =
+      Path.combine ctx.OutputDir "rss.xml"
+    let settings = new XmlWriterSettings()
+    do settings.Async <- true
+    use writer = XmlWriter.Create(rssLocation, settings)
+    do! writer.WriteStartDocumentAsync()
+    do! writer |> writeStartElementAsync "rss"
+    do! writer |> writeElementStringAsync "version" "2.0"
+    do! writer |> writeStartElementAsync "channel"
+    do! writer |> writeElementStringAsync "title" ctx.config.Title
+    do! writer |> writeElementStringAsync "link"  ctx.config.BaseUrl
+    do! writer |> writeElementStringAsync "description" ctx.config.Description
+    if ctx.config.Copyright.IsSome then
+      do! writer |> writeElementStringAsync "copyright" ctx.config.Copyright.Value
+    for page in ctx.pages do
+      if page.PageType = PageType.Post then
+        do! writer |> writeStartElementAsync "item"
+        do! 
+          writer |> writeElementStringAsync "link"
+            (Path.ChangeExtension(page.relativeLocation, "html")
+             |> Path.combine ctx.config.BaseUrl)
+        match page.metadata with
+          | ValueSome meta ->
+            do! writer |> writeElementStringAsync "title" meta.Title
+            do! writer |> writeElementStringAsync "description" meta.Description
+            match meta.Date with
+              | Some date ->
+                do! writer |> writeElementStringAsync "pubDate" (date.ToString("r"))
+              | None -> ()
+          | ValueNone -> ()
+        do! writer.WriteEndElementAsync()
+    do! writer.WriteEndElementAsync()
+    do! writer.WriteEndElementAsync()
+    do! writer.WriteEndDocumentAsync()
+    do! writer.FlushAsync()
+  }
+
 /// Render everything in the current context.
 let everything (ctx: Context) =
   tryOperation ctx "Render.everything" "current context" <| fun () ->
@@ -235,9 +280,11 @@ let everything (ctx: Context) =
 
     let result =
       seq {
+        yield generateRssFeed ctx
+        yield async { copyContent ctx }
+
         yield! renderTagArchive ctx renderCtx
         yield! renderMonthlyArchive ctx renderCtx
-        yield async { copyContent ctx }
 
         for pageChunk in ctx.pages |> Seq.chunkBySize synchronousRenderCount do
         // for page in ctx.pages do

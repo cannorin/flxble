@@ -70,8 +70,10 @@ type ScriptObject =
     member this.Item name =
       match this with
         | Record d ->
-          d |> Map.tryFind name
-          ?| Null (EqualityNull <| lazy (sprintf "key not found: '%s'" name))
+          d
+          |> Map.tryFind' name
+          |> defaultValueArg <|
+            Null (EqualityNull <| lazy (sprintf "key not found: '%s'" name))
         | Date d ->
           match name with
             | "year" -> Int d.Year
@@ -170,7 +172,7 @@ type ScriptStatement =
   /// \[%%otherwise
   /// ...\]
   /// %%end
-  | When of cond:ScriptExprWithInfo * exec:Template * otherwise:Template option
+  | When of cond:ScriptExprWithInfo * exec:Template * otherwise:Template voption
   /// %%for NAME in EXPR do
   /// ...
   /// %%end

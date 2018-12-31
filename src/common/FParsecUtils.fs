@@ -104,6 +104,17 @@ let inline ws x = x .>> spaces
 /// Applies the `parser` for `n` times.
 let inline times n parser = parray n parser |>> List.ofArray
 
+/// Variant of `opt` which returns `ValueOption` instead of `Option`
+let inline opt' (p: Parser<'a, 'u>) : Parser<'a voption, 'u> =
+  fun stream ->
+    let stateTag = stream.StateTag
+    let reply = p stream
+    if reply.Status = Ok then
+      Reply (Ok, ValueSome reply.Result, reply.Error)
+    else
+      let status = if reply.Status = Error && stateTag = stream.StateTag then Ok else reply.Status
+      Reply (status, reply.Error)
+
 /// Applies the `parser` up to `n` times.
 let rec upto n parser =
   if n > 0 then

@@ -63,7 +63,7 @@ let private generatePipeline ctx =
       |> customize
       |> fun x -> x.Build()
 
-let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
+let private renderPageToOutput ctx templateCtx pipeline page =
   tryOperation ctx "renderPageToOutput" page.relativeLocation <| fun () ->
     if Directory.Exists ctx.OutputDir |> not then
       ctx.logger.warning "the output directory '%s' does not exist, creating." ctx.config.OutputDir
@@ -79,22 +79,22 @@ let private renderPageToOutput ctx templateCtx pipeline prevnextfinder page =
 
         let pageVariables = page.ToScriptObjectMap()
 
-        let prevnextObjs = seq {
+        let prevnextObjs = [|
           match page.metadata with
             | ValueNone -> ()
-            | ValueSome mt ->
-              let prev, next = prevnextfinder mt.PageType page
+            | ValueSome _ ->
+              let prev, next = ctx.FindPrevNextPost page
               match prev with
                 | ValueSome x -> yield "prev_date_page", ScriptObject.from x
                 | ValueNone -> ()
               match next with
                 | ValueSome x -> yield "next_date_page", ScriptObject.from x
                 | ValueNone -> ()
-        }
+        |]
 
         let renderCtx = 
           templateCtx |> TemplateContext.addMany pageVariables
-                      |> TemplateContext.addMany (Map.ofSeq prevnextObjs)
+                      |> TemplateContext.addMany (Map.ofArray prevnextObjs)
 
         let content =
           match page.format with
@@ -274,8 +274,6 @@ let everything (ctx: Context) =
       let rctx = TemplateContext.create ctx.Culture (sprintf "<!-- %s -->")
       rctx |> TemplateContext.addMany (ctx.ToScriptObjectMap())
 
-    let prevnextfinder = ctx.PrevNextPostFinder
-
     let result =
       seq {
         yield generateRssFeed ctx
@@ -289,7 +287,7 @@ let everything (ctx: Context) =
           yield async {
             for page in pageChunk do
               ctx.logger.trace "processing file '%s'..." page.absoluteLocation
-              renderPageToOutput ctx renderCtx pipeline prevnextfinder page
+              renderPageToOutput ctx renderCtx pipeline page
           }
        } |> Async.Parallel
          |> Async.Catch

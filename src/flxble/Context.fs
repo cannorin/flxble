@@ -24,9 +24,8 @@ type ContextHelperCache(this: Context) =
   member val Tags =
     lazy (
       this.pages
-        |> Seq.collect (function { metadata = ValueSome md } -> md.Tags | _ -> [])
-        |> Seq.distinct
-        |> Seq.toArray
+        |> Array.collect (function { metadata = ValueSome md } -> md.Tags |> Array.ofList | _ -> [||])
+        |> Array.distinct
     )
   member val Months =
     lazy (
@@ -36,19 +35,6 @@ type ContextHelperCache(this: Context) =
             md.Date |> Option.map (fun x -> new DateTime(x.Year, x.Month, 1))
           | _ -> None)
         |> Array.distinct
-    )
-  member val PrevNextPostFinder =
-    lazy (
-      fun pageType ->
-        let posts =
-          this.pages |> Array.filter (fun x -> x.metadata.IsSome && x.metadata.Value.PageType = pageType)
-        function
-          | { metadata = ValueNone; relativeLocation = _ } -> ValueNone, ValueNone
-          | { metadata = ValueSome md } ->
-            let date = md.Date
-            match posts |> Array.tryFindIndex' (fun x -> x.metadata.Value.Date = date) with
-              | ValueNone -> ValueNone, ValueNone
-              | ValueSome i -> posts |> Array.tryItem' (i+1), posts |> Array.tryItem' (i-1)
     )
   member val AsScriptObjectMap =
     lazy (
@@ -127,7 +113,18 @@ and Context = {
           |> Option.defaultValue false
         | _ -> false)
 
-  member this.PrevNextPostFinder = this.Cache.PrevNextPostFinder.Value
+  member this.FindPrevNextPost page =
+    match page with
+      | { metadata = ValueNone; relativeLocation = _ } -> ValueNone, ValueNone
+      | { metadata = ValueSome md; index = ValueSome i } ->
+        if md.Date.IsSome then
+          this.pages |> Array.tryItem' (i+1), this.pages |> Array.tryItem' (i-1)
+        else ValueNone, ValueNone
+      | { metadata = ValueSome md } ->
+        let date = md.Date
+        match this.pages |> Array.tryFindIndex' (fun x -> x.metadata.IsSome && x.metadata.Value.Date = date) with
+          | ValueNone -> ValueNone, ValueNone
+          | ValueSome i -> this.pages |> Array.tryItem' (i+1), this.pages |> Array.tryItem' (i-1)
 
   member this.ToScriptObjectMap() = this.Cache.AsScriptObjectMap.Value
 
@@ -172,20 +169,20 @@ module Context =
         metadata = metadata
         content  = content
         scriptObjectMap = ValueNone
+        index = ValueNone
       }
 
   let inline private sortPagesAndCache ctx =
-    {
-      ctx with
-        pages =
-          ctx.pages 
-            |> Array.sortByDescending (
-              fun x ->
-                match x.metadata with
-                  | ValueSome md -> md.Date
-                  | ValueNone -> None
-              )
-    }
+    let pages =
+      ctx.pages 
+        |> Array.sortByDescending (
+          fun x ->
+            match x.metadata with
+              | ValueSome md -> x.PageType, md.Date
+              | ValueNone -> x.PageType, None
+          )
+        |> Array.mapi (fun i page -> { page with index = ValueSome i })
+    { ctx with pages = pages }
 
   let inline private clearCache ctx = { ctx with cache = ValueNone }
   

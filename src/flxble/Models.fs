@@ -35,6 +35,7 @@ type PageInfo = {
   format: PageFormat
   metadata: PageMetaData voption
   content: string
+  index: int voption
   mutable scriptObjectMap: Map<string, ScriptObject> voption
 } with
   member this.PageType =

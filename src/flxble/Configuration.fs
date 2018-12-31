@@ -12,12 +12,12 @@ let rec private convert = function
   | TomlValue.Date d -> ScriptObject.Date d
   | TomlValue.Array nodes -> convert' nodes
 and private convert' = function
-  | NodeArray.Bools xs    -> xs |> List.map ScriptObject.Bool  |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Ints xs     -> xs |> List.map ScriptObject.Int   |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Floats xs   -> xs |> List.map ScriptObject.Float |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Strings xs  -> xs |> List.map ScriptObject.String  |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Dates xs    -> xs |> List.map ScriptObject.Date  |> List.toSeq |> ScriptObject.Array
-  | NodeArray.Arrays xs   -> xs |> List.map convert' |> List.toSeq |> ScriptObject.Array
+  | NodeArray.Bools xs    -> xs |> Seq.map ScriptObject.Bool   |> Array.ofSeq |> ScriptObject.Array
+  | NodeArray.Ints xs     -> xs |> Seq.map ScriptObject.Int    |> Array.ofSeq |> ScriptObject.Array
+  | NodeArray.Floats xs   -> xs |> Seq.map ScriptObject.Float  |> Array.ofSeq |> ScriptObject.Array
+  | NodeArray.Strings xs  -> xs |> Seq.map ScriptObject.String |> Array.ofSeq |> ScriptObject.Array
+  | NodeArray.Dates xs    -> xs |> Seq.map ScriptObject.Date   |> Array.ofSeq |> ScriptObject.Array
+  | NodeArray.Arrays xs   -> xs |> Seq.map convert' |> Array.ofSeq |> ScriptObject.Array
 
 type TomlDocument with
   member this.ToScriptObjectMap() =

@@ -6,25 +6,21 @@ open DataTypeExtra
 open SyntaxTree
 
 let inline fn i f =
-  Function (i, StructuralFunction (Seq.toList >> f))
-
-let inline fnlazy i f =
   Function (i, StructuralFunction f)
 
 let inline record m =
   Record (m |> Map.ofSeq)
 
-let inline err i name (objs: ScriptObject seq) =
-  let objs = objs |> Seq.cache
-  if i = Seq.length objs then
+let inline err i name (objs: ScriptObject list) =
+  if i = objs.Length then
     lazy (
       sprintf "the function '%s' does not support type(s) %s"
-        name (objs |> Seq.map (fun x -> x.ObjectType |> sprintf "'%A'") |> String.concat ", ")
+        name (objs |> List.map (fun x -> x.ObjectType |> sprintf "'%A'") |> String.concat ", ")
     ) |> EValue |> Null
   else
     lazy (
     sprintf "the function '%s' takes %i argument(s) but given %i"
-      name i (Seq.length objs)
+      name i objs.Length
     ) |> EValue |> Null
 
 let inline toBool obj =
@@ -47,7 +43,7 @@ let inline toFloat obj =
 
 let inline toArr obj =
   match obj with
-    | Array xs -> xs | _ -> Seq.empty
+    | Array xs -> xs | _ -> Array.empty
 
 let inline toStr culture (obj: ScriptObject) =
   obj.AsCulturalString culture id
@@ -107,7 +103,7 @@ let inline removelike f name =
 let inline padby f name =
   name, fn 3 (function
     | [Int count; String chars; String s] ->
-      chars |> String.toChars |> Seq.fold (fun state c -> f count c state) s |> String
+      chars |> String.toChars |> Array.fold (fun state c -> f count c state) s |> String
     | xs -> err 3 name xs
       )
 let inline takelike f name =
@@ -129,18 +125,16 @@ let inline defaultBindings (culture: CultureInfo) =
     yield "?|", fn 2 (function [Null _; x] | [x; _] -> x | xs -> err 2 "?|" xs)
 
     // logical
-    yield "||", fnlazy 2 (fun xs ->
-      let xs = Seq.cache xs
-      match xs |> Seq.tryItem' 0 with
-        | ValueSome (Bool false | Null _) -> Seq.tryItem' 1 xs |> defaultValueArg <| err 2 "||" xs
+    yield "||", fn 2 (fun xs ->
+      match xs |> List.tryItem' 0 with
+        | ValueSome (Bool false | Null _) -> List.tryItem' 1 xs |> defaultValueArg <| err 2 "||" xs
         | ValueSome _ -> Bool true
         | ValueNone -> err 2 "||" xs
     )
-    yield "&&", fnlazy 2 (fun xs ->
-      let xs = Seq.cache xs
-      match xs |> Seq.tryItem' 0 with
+    yield "&&", fn 2 (fun xs ->
+      match xs |> List.tryItem' 0 with
         | ValueSome (Bool false | Null _) -> Bool false
-        | ValueSome _ -> Seq.tryItem' 1 xs |> defaultValueArg <| err 2 "&&" xs
+        | ValueSome _ -> List.tryItem' 1 xs |> defaultValueArg <| err 2 "&&" xs
         | ValueNone -> err 2 "&&" xs
     )
     yield "not", fn 1 (function
@@ -154,7 +148,7 @@ let inline defaultBindings (culture: CultureInfo) =
       | [Int i; Int j]       -> i+j |> Int
       | [Float i; Float j]   -> i+j |> Float
       | [String i; String j] -> i+j |> String
-      | [Array xs; Array ys] -> Seq.append xs ys |> Array
+      | [Array xs; Array ys] -> Array.append xs ys |> Array
       | [Record a; Record b] -> Map.append a b |> Record
       | [TimeSpan a; TimeSpan b] -> a+b |> TimeSpan
       | [TimeSpan s; Date d]
@@ -295,89 +289,88 @@ let inline defaultBindings (culture: CultureInfo) =
     yield "array", record <| seq {
       yield "map", fn 2 (function
         | [f; Array xs] ->
-          Array (xs |> Seq.map (Seq.singleton >> f.Invoke))
+          Array (xs |> Array.map (List.singleton >> f.Invoke))
         | xs -> err 2 "map" xs
       )
       yield "filter", fn 2 (function
         | [p; Array xs] ->
-          Array (xs |> Seq.filter (Seq.singleton >> p.Invoke >> toBool))
+          Array (xs |> Array.filter (List.singleton >> p.Invoke >> toBool))
         | xs -> err 2 "filter" xs
       )
       yield "take", fn 2 (function
         | [Int n; Array xs] ->
-          match xs |> Seq.tryTake n with
-            | Some xs' -> Array xs'
-            | None -> Array xs
+          match xs |> Array.tryTake' n with
+            | ValueSome xs' -> Array xs'
+            | ValueNone -> Array xs
         | xs -> err 2 "take" xs
       )
       yield "skip", fn 2 (function
-        | [Int n; Array xs] -> Array (xs |> Seq.skipSafe n)
+        | [Int n; Array xs] -> Array (xs |> Array.skipSafe n)
         | xs -> err 2 "skip" xs
       )
       yield "fold", fn 3 (function
         | [f; s; Array xs] ->
-          xs |> Seq.fold (fun s x -> f.Invoke [s; x]) s
+          xs |> Array.fold (fun s x -> f.Invoke [s; x]) s
         | xs -> err 3 "fold" xs
       )
       yield "forall", fn 2 (function
         | [p; Array xs] ->
-          xs |> Seq.forall (Seq.singleton >> p.Invoke >> toBool) |> Bool
+          xs |> Array.forall (List.singleton >> p.Invoke >> toBool) |> Bool
         | xs -> err 2 "forall" xs
       )
       yield "exists", fn 2 (function
         | [p; Array xs] ->
-          xs |> Seq.exists (Seq.singleton >> p.Invoke >> toBool) |> Bool
+          xs |> Array.exists (List.singleton >> p.Invoke >> toBool) |> Bool
         | xs -> err 2 "exists" xs
       )
       yield "is_empty", fn 1 (function
         | [Array xs] ->
-          xs |> Seq.isEmpty |> Bool
+          xs |> Array.isEmpty |> Bool
         | xs -> err 1 "is_empty" xs
       )
       yield "indexed", fn 1 (function
         | [Array xs] ->
-          xs |> Seq.indexed
-             |> Seq.map (fun (i, x) -> Record (Map.ofList ["index", Int i; "item", x]))
+          xs |> Array.mapi (fun i x -> Record (Map.ofList ["index", Int i; "item", x]))
              |> Array
         | xs -> err 1 "indexed" xs
       )
       yield "find", fn 2 (function
         | [p; Array xs] ->
-           xs |> Seq.tryFind (Seq.singleton >> p.Invoke >> toBool)
+           xs |> Array.tryFind (List.singleton >> p.Invoke >> toBool)
            ?| Null (EValue (lazy "element not found"))
         | xs -> err 2 "find" xs
       )
       yield "length", fn 1 (function
-        | [Array xs] -> Seq.length xs |> Int
+        | [Array xs] -> Array.length xs |> Int
         | xs -> err 1 "length" xs
       )
       yield "rev", fn 1 (function
-        | [Array xs] -> Array (Seq.rev xs)
+        | [Array xs] -> Array (Array.rev xs)
         | xs -> err 1 "rev" xs
       )
       yield "sort", fn 1 (function
         | [Array xs] ->
-          Array (xs |> Seq.sortBy toCompare)
+          Array (xs |> Array.sortBy toCompare)
         | xs -> err 1 "sort" xs
       )
       yield "sort_desc", fn 1 (function
         | [Array xs] ->
-          Array (xs |> Seq.sortByDescending toCompare)
+          Array (xs |> Array.sortByDescending toCompare)
         | xs -> err 1 "sort_desc" xs
       )
       yield "sort_by", fn 2 (function
         | [f; Array xs] ->
-          Array (xs |> Seq.sortBy (Seq.singleton >> f.Invoke >> toCompare))
+          Array (xs |> Array.sortBy (List.singleton >> f.Invoke >> toCompare))
         | xs -> err 2 "sort_by" xs
       )
       yield "sort_desc_by", fn 2 (function
         | [f; Array xs] ->
-          Array (xs |> Seq.sortByDescending (Seq.singleton >> f.Invoke >> toCompare))
+          Array (xs |> Array.sortByDescending (List.singleton >> f.Invoke >> toCompare))
         | xs -> err 2 "sort_desc_by" xs
       )
       yield "concat", fn 1 (function
         | [Array xss] ->
-          Array (xss |> Seq.map toArr |> Seq.concat)
+          Array (xss |> Array.map toArr |> Array.concat)
         | xs -> err 1 "concat" xs
       )
     }
@@ -386,12 +379,12 @@ let inline defaultBindings (culture: CultureInfo) =
     yield "string", record <| seq {
       yield "concat", fn 2 (function
         | [String s; Array xs] ->
-          xs |> Seq.map (toStr culture) |> String.concat s |> String
+          xs |> Array.map (toStr culture) |> String.concat s |> String
         | xs -> err 2 "concat" xs
       )
       yield "concat_invariant", fn 2 (function
         | [String s; Array xs] ->
-          xs |> Seq.map (toStr CultureInfo.InvariantCulture) |> String.concat s |> String
+          xs |> Array.map (toStr CultureInfo.InvariantCulture) |> String.concat s |> String
         | xs -> err 2 "concat_invariant" xs
       )
       yield s2 String.contains "contains" Bool
@@ -420,8 +413,11 @@ let inline defaultBindings (culture: CultureInfo) =
       
       yield takelike String.skip "skip"
       yield "split", fn 2 (function
-        | [String sep; String s] -> String.split sep s |> Seq.map String |> Array
-        | [Array seps; String s] -> String.splitSeq (seps |> Seq.map (toStr culture)) s |> Seq.map String |> Array
+        | [String sep; String s] ->
+          String.split sep s |> Array.map String |> Array
+        | [Array seps; String s] ->
+          String.splitSeq (seps |> Array.map (toStr culture)) s
+          |> Array.map String |> Array
         | xs -> err 2 "split" xs
       )
       yield s2 String.startsWith "starts_with" Bool
@@ -446,12 +442,12 @@ let inline defaultBindings (culture: CultureInfo) =
       // https://docs.microsoft.com/en-us/dotnet/standard/base-types/composite-formatting?view=netframework-4.7.2#composite-format-string
       yield "format", fn 2 (function
         | [String fmt; Array xs] ->
-          String.Format(fmt, xs |> Seq.map (toFmtBox culture) |> Seq.toArray) |> String
+          String.Format(fmt, xs |> Array.map (toFmtBox culture)) |> String
         | xs -> err 2 "format" xs
       )
       yield "format_invariant", fn 2 (function
         | [String fmt; Array xs] ->
-          String.Format(fmt, xs |> Seq.map (toFmtBox CultureInfo.InvariantCulture) |> Seq.toArray) |> String
+          String.Format(fmt, xs |> Array.map (toFmtBox CultureInfo.InvariantCulture)) |> String
         | xs -> err 2 "format_invariant" xs
       )
 
@@ -464,7 +460,7 @@ let inline defaultBindings (culture: CultureInfo) =
     yield "path", record <| seq {
       yield "combine", fn 1 (function
         | [Array xs] ->
-          xs |> Seq.map (toStr culture) |> Path.combineMany |> String
+          xs |> Array.map (toStr culture) |> Path.combineMany |> String
         | xs -> err 1 "combine" xs
       )
       yield "make_relative_to", fn 2 (function
@@ -477,12 +473,12 @@ let inline defaultBindings (culture: CultureInfo) =
     // record module
     yield "record", record <| seq {
       yield "keys", fn 1 (function
-        | [Record m] -> (m :> dict<_, _>).Keys |> Seq.map String |> Array
+        | [Record m] -> (m :> dict<_, _>).Keys |> Seq.map String |> Array.ofSeq |> Array
         | xs -> err 1 "keys" xs
       )
 
       yield "values", fn 1 (function
-        | [Record m] -> (m :> dict<_, _>).Values :> seq<_> |> Array
+        | [Record m] -> (m :> dict<_, _>).Values :> seq<_> |> Array.ofSeq |> Array
         | xs -> err 1 "values" xs
       )
 

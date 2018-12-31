@@ -22,9 +22,9 @@ type ScriptObject =
   | String  of string
   | Date    of DateTime
   | TimeSpan of TimeSpan
-  | Array   of ScriptObject seq
+  | Array   of ScriptObject array
   | Record  of Map<string, ScriptObject>
-  | Function of argLength: int * StructuralFunction<ScriptObject seq, ScriptObject>
+  | Function of argLength: int * StructuralFunction<ScriptObject list, ScriptObject>
   /// Null value. Can also contain an error message as `EValue errorMessage`.
   | Null of errorMessage:EqualityNull<Lazy<string>>
   with
@@ -105,9 +105,9 @@ type ScriptObject =
         | Array xs ->
           let xs' =
             if index >= 0 then
-              xs |> Seq.tryItem' index
+              xs |> Array.tryItem' index
             else
-              xs |> Seq.rev |> Seq.tryItem' (-index-1)
+              xs |> Array.tryItem' (xs.Length + index)
           xs' |> defaultValueArg <| Null (EqualityNull (lazy "index out of range"))
         | String s ->
           s |> Seq.tryItem' index |> ValueOption.map (string >> String)
@@ -119,19 +119,20 @@ type ScriptObject =
     /// If it is not a function or raised an error,
     /// `Null` with the corresponding error message will be returned.
     member this.Invoke args =
+      let args = List.ofSeq args
       let rec apply args func =
-        let arglen = Seq.length args
+        let arglen = List.length args
         match func with
           | v when arglen = 0 -> v
           | Function (i, f) ->
             if i <= arglen then
-              let args' = args |> Seq.take i
+              let args' = args |> List.take i
               f.Invoke args'
-              |> apply (args |> Seq.skip i)
+              |> apply (args |> List.skip i)
             else
               let i' = i - arglen
               let f xs =
-                f.Invoke (Seq.append args xs)
+                f.Invoke (List.append args xs)
               Function (i', StructuralFunction f)
           | Null (EValue _) -> func
           | _ -> Null (EqualityNull (lazy "not a function"))
@@ -207,22 +208,22 @@ module ScriptExpr =
       | Lambda (vars, body) ->
         let f xs =
           let ctx =
-            Seq.zip vars xs
-            |> Seq.fold (fun state (k, v) -> state |> Map.add k v) context
+            List.zip vars xs
+            |> List.fold (fun state (k, v) -> state |> Map.add k v) context
           body |> eval ctx
         Function (vars.Length, StructuralFunction f)
       | Let (var, value, body) ->
         body |> eval (context |> Map.add var (eval context value))
       | ArrayNew xs ->
-        Array (xs |> Seq.map (eval context) |> Seq.cache)
+        Array (xs |> Seq.map (eval context) |> Array.ofSeq)
       | RecordNew xs ->
-        xs |> Seq.map (Tuple.map2 id (eval context))
-           |> Map.ofSeq
+        xs |> List.map (Tuple.map2 id (eval context))
+           |> Map.ofList
            |> Record
       | RecordWith (orig, xs) ->
         match eval context orig with
           | Record m ->
-            xs |> Seq.fold (fun m (k, v) -> m |> Map.add k (eval context v)) m
+            xs |> List.fold (fun m (k, v) -> m |> Map.add k (eval context v)) m
                |> Record  
           | Null (EValue _)  as x -> x
           | _ -> err <| lazy (errorFmt expr.info "not a record")
@@ -263,6 +264,6 @@ module ScriptExpr =
      
       | Application (func, args) ->
         let func = eval context func
-        match func.Invoke (args |> Seq.map (eval context) |> Seq.cache) with
+        match func.Invoke (args |> List.map (eval context)) with
           | Null (EValue msg) -> msg |> Lazy.map (errorFmt expr.info "%s") |> err
           | x -> x

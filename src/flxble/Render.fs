@@ -10,7 +10,8 @@ open Flxble.Templating.ScriptObjectHelper
 open Markdig
 open System.Net
 
-let synchronousRenderCount = 50
+[<Literal>]
+let synchronousRenderCount = 30
 
 let rec private applyTemplateToHtml ctx renderCtx localVariables templateName html fileName =
   tryOperation ctx "applyTemplateToHtml" fileName <| fun () ->
@@ -145,7 +146,6 @@ let private renderArchive archiveType tempName elements predicate title printer 
               pages
                 |> Array.filter (fun (x, _) -> predicate element x)
                 |> Array.map    snd
-                |> Array.toSeq
                 |> ScriptObject.Array
 
             let archiveObj =

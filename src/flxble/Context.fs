@@ -53,24 +53,24 @@ type ContextHelperCache(this: Context) =
   member val AsScriptObjectMap =
     lazy (
       let pagesOfType x =
-        match x |> Seq.toList with
+        match x with
           | [ScriptObject.String name] ->
-            this.PagesOfType name |> Seq.map ScriptObject.from |> ScriptObject.Array
+            this.PagesOfType name |> Array.map ScriptObject.from |> ScriptObject.Array
           | _ -> ScriptObject.Null DataTypeExtra.ENull
 
       let pagesOfTag x =
-        match x |> Seq.toList with
+        match x with
           | [ScriptObject.String name] ->
-            this.PagesOfTag name |> Seq.map ScriptObject.from |> ScriptObject.Array
+            this.PagesOfTag name |> Array.map ScriptObject.from |> ScriptObject.Array
           | _ -> ScriptObject.Null DataTypeExtra.ENull
 
       let pagesOfMonth x =
-        match x |> Seq.toList with
+        match x with
           | [ScriptObject.Int year; ScriptObject.Int month] ->
-            this.PagesOfMonth year month |> Seq.map ScriptObject.from |> ScriptObject.Array
+            this.PagesOfMonth year month |> Array.map ScriptObject.from |> ScriptObject.Array
           | _ -> ScriptObject.Null ENull
 
-      Map.ofSeq <| seq {
+      Map.ofArray [|
         yield "config", this.config |> ScriptObject.from
         yield "pages", array' (this.pages |> Array.map ScriptObject.from)
         yield "templates", ScriptObject.Record (this.templates |> Map.map (fun _ -> ScriptObject.from))
@@ -79,7 +79,7 @@ type ContextHelperCache(this: Context) =
         yield "pages_of_month", function' 2 pagesOfMonth
         yield "pages_of_tag", function' 1 pagesOfTag
         yield "pages_of_type", function' 1 pagesOfType
-      }
+      |]
     )
 
 and Context = {

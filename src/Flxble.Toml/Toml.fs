@@ -2,7 +2,7 @@ module Flxble.Toml
 
 open System
 
-[<RequireQualifiedAccess>]
+[<RequireQualifiedAccess; Struct>]
 type TomlType = Bool | Int | Float | String | Date | Array
 
 [<RequireQualifiedAccess>]
@@ -42,12 +42,12 @@ type NodeArray =
 
 [<RequireQualifiedAccess>]
 type TomlValue =
-  | Bool   of bool
-  | Int    of int
-  | Float  of float
-  | String of string
-  | Date   of DateTime
-  | Array  of NodeArray
+  | Bool   of b:bool
+  | Int    of i:int
+  | Float  of f:float
+  | String of s:string
+  | Date   of d:DateTime
+  | Array  of xs:NodeArray
   override __.ToString () =
     match __ with
       | Bool   b -> sprintf "%b"   b
@@ -191,8 +191,8 @@ type TomlDocumentOf<'t> = { tomlOfT: Map<string, 't> } with
     this.tomlOfT |> Map.tryFind key 
   static member inline (@.) (this: TomlDocumentOf<_>, key: string) =
     this.tomlOfT
-      |> Map.tryFind key 
-      |> Option.defaultWith (fun () ->
+      |> Map.tryFind' key 
+      |> ValueOption.defaultWith (fun () ->
         KeyNotFoundException(sprintf "The key '%s' not found." key) |> raise)
   interface IDictionary<string, 't> with
     member this.Item
@@ -215,22 +215,21 @@ type TomlDocumentOf<'t> = { tomlOfT: Map<string, 't> } with
     member this.GetEnumerator() = (this.tomlOfT :> Collections.IEnumerable).GetEnumerator()
 
 /// Represents a TOML document.
-type TomlDocument = { 
-    toml: Map<string, TomlValue>
-  } with
-  member this.bools   = { tomlOfT = this.toml |> Map.choose (fun _ -> function TomlValue.Bool b -> Some b | _ -> None) }
-  member this.ints    = { tomlOfT = this.toml |> Map.choose (fun _ -> function TomlValue.Int i -> Some i | _ -> None) }
-  member this.floats  = { tomlOfT = this.toml |> Map.choose (fun _ -> function TomlValue.Float f -> Some f | _ -> None) }
-  member this.strings = { tomlOfT = this.toml |> Map.choose (fun _ -> function TomlValue.String s -> Some s | _ -> None) }
-  member this.dates   = { tomlOfT = this.toml |> Map.choose (fun _ -> function TomlValue.Date d -> Some d | _ -> None) }
-  member this.arrays  = { tomlOfT = this.toml |> Map.choose (fun _ -> function TomlValue.Array xs -> Some xs | _ -> None) }
+type TomlDocument(toml: Map<string, TomlValue>) = 
+  member val toml = toml
+  member val bools   = lazy { tomlOfT = toml |> Map.choose (fun _ -> function TomlValue.Bool b -> Some b | _ -> None) }
+  member val ints    = lazy { tomlOfT = toml |> Map.choose (fun _ -> function TomlValue.Int i -> Some i | _ -> None) }
+  member val floats  = lazy { tomlOfT = toml |> Map.choose (fun _ -> function TomlValue.Float f -> Some f | _ -> None) }
+  member val strings = lazy { tomlOfT = toml |> Map.choose (fun _ -> function TomlValue.String s -> Some s | _ -> None) }
+  member val dates   = lazy { tomlOfT = toml |> Map.choose (fun _ -> function TomlValue.Date d -> Some d | _ -> None) }
+  member val arrays  = lazy { tomlOfT = toml |> Map.choose (fun _ -> function TomlValue.Array xs -> Some xs | _ -> None) }
   member inline this.Item(key) = this.toml |> Map.tryFind key
   static member inline (@?) (this: TomlDocument, key: string) =
     this.toml |> Map.tryFind key 
   static member inline (@.) (this: TomlDocument, key: string) =
     this.toml
-      |> Map.tryFind key 
-      |> Option.defaultWith (fun () ->
+      |> Map.tryFind' key 
+      |> ValueOption.defaultWith (fun () ->
         KeyNotFoundException(sprintf "The key '%s' not found." key) |> raise)
   interface IDictionary<string, TomlValue> with
     member this.Item
@@ -255,10 +254,10 @@ type TomlDocument = {
 module TomlDocument =
   let fromTokens tokens =
     let mutable toml = Map.empty
-    let mutable currentKeyGroup = None
+    let mutable currentKeyGroup = ValueNone
     for token in tokens do
       match token with
-      | KeyGroup kg -> currentKeyGroup <- Some kg
+      | KeyGroup kg -> currentKeyGroup <- ValueSome kg
       | KeyValue (key,value) -> 
         let key = 
           seq {
@@ -267,7 +266,7 @@ module TomlDocument =
             yield key
           } |> String.concat "."
         toml <- toml |> Map.add key value
-    { toml = toml }
+    TomlDocument(toml)
   
   /// Parses a TOML string `text` to a `TomlDocument`.
   let parse text =
@@ -327,7 +326,6 @@ module LensLike =
 
 open LensLike
 
-[<Struct>]
 type TomlArray<'t> = { items: 't list } with
   member inline this.Item i = this.items.[i]
   static member inline Of (arr: TomlArray< ^Item >, ty: ^TomlType) =
@@ -339,12 +337,12 @@ type TomlArray<'t> = { items: 't list } with
     member this.GetEnumerator() = (this.items :> Collections.IEnumerable).GetEnumerator()
 
 type TomlDocument with
-  static member inline Of (doc: TomlDocument, TomlTypes.Bool) = doc.bools
-  static member inline Of (doc: TomlDocument, TomlTypes.Int) = doc.ints
-  static member inline Of (doc: TomlDocument, TomlTypes.Float) = doc.floats
-  static member inline Of (doc: TomlDocument, TomlTypes.String) = doc.strings
-  static member inline Of (doc: TomlDocument, TomlTypes.Date) = doc.dates
-  static member inline Of (doc: TomlDocument, TomlTypes.Array) = doc.arrays
+  static member inline Of (doc: TomlDocument, TomlTypes.Bool) = doc.bools.Value
+  static member inline Of (doc: TomlDocument, TomlTypes.Int) = doc.ints.Value
+  static member inline Of (doc: TomlDocument, TomlTypes.Float) = doc.floats.Value
+  static member inline Of (doc: TomlDocument, TomlTypes.String) = doc.strings.Value
+  static member inline Of (doc: TomlDocument, TomlTypes.Date) = doc.dates.Value
+  static member inline Of (doc: TomlDocument, TomlTypes.Array) = doc.arrays.Value
 
 type NodeArray with
   static member inline Unwrap x = x

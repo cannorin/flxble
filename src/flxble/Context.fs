@@ -26,32 +26,29 @@ type ContextHelperCache(this: Context) =
       this.pages
         |> Seq.collect (function { metadata = ValueSome md } -> md.Tags | _ -> [])
         |> Seq.distinct
+        |> Seq.toArray
     )
   member val Months =
     lazy (
       this.pages  
-        |> Seq.choose (function
+        |> Array.choose (function
           | { metadata = ValueSome md } ->
             md.Date |> Option.map (fun x -> new DateTime(x.Year, x.Month, 1))
           | _ -> None)
-        |> Seq.distinct
+        |> Array.distinct
     )
   member val PrevNextPostFinder =
     lazy (
-      let posts =
-        this.pages
-          |> Seq.filter (fun x -> x.metadata.IsSome)
-          |> Seq.cache
       fun pageType ->
         let posts =
-          posts |> Seq.filter (fun x -> x.metadata.Value.PageType = pageType)
+          this.pages |> Array.filter (fun x -> x.metadata.IsSome && x.metadata.Value.PageType = pageType)
         function
           | { metadata = ValueNone; relativeLocation = _ } -> ValueNone, ValueNone
           | { metadata = ValueSome md } ->
             let date = md.Date
-            match posts |> Seq.tryFindIndex' (fun x -> x.metadata.Value.Date = date) with
+            match posts |> Array.tryFindIndex' (fun x -> x.metadata.Value.Date = date) with
               | ValueNone -> ValueNone, ValueNone
-              | ValueSome i -> posts |> Seq.tryItem' (i+1), posts |> Seq.tryItem' (i-1)
+              | ValueSome i -> posts |> Array.tryItem' (i+1), posts |> Array.tryItem' (i-1)
     )
   member val AsScriptObjectMap =
     lazy (
@@ -75,10 +72,10 @@ type ContextHelperCache(this: Context) =
 
       Map.ofSeq <| seq {
         yield "config", this.config |> ScriptObject.from
-        yield "pages", array' (this.pages |> Seq.map ScriptObject.from)
+        yield "pages", array' (this.pages |> Array.map ScriptObject.from)
         yield "templates", ScriptObject.Record (this.templates |> Map.map (fun _ -> ScriptObject.from))
-        yield "tags",  array' (this.Tags  |> Seq.map ScriptObject.String)
-        yield "months", array' (this.Months |> Seq.map ScriptObject.Date)
+        yield "tags",  array' (this.Tags  |> Array.map ScriptObject.String)
+        yield "months", array' (this.Months |> Array.map ScriptObject.Date)
         yield "pages_of_month", function' 2 pagesOfMonth
         yield "pages_of_tag", function' 1 pagesOfTag
         yield "pages_of_type", function' 1 pagesOfType
@@ -89,18 +86,18 @@ and Context = {
   /// absolute location of the config file.
   configLocation: string
   config: BlogConfig
-  pages: PageInfo seq
+  pages: PageInfo array
   templates: Map<string, TemplateInfo>
   logger: Logger
-  mutable cache: ContextHelperCache option
+  mutable cache: ContextHelperCache voption
 } with
   member this.Cache =
     match this.cache with
-      | None ->
+      | ValueNone ->
         let cache = ContextHelperCache(this)
-        this.cache <- Some cache
+        this.cache <- ValueSome cache
         cache
-      | Some x -> x
+      | ValueSome x -> x
   
   member this.Culture = this.Cache.Culture.Value
   member this.ConfigDir = this.Cache.ConfigDir.Value
@@ -111,25 +108,24 @@ and Context = {
 
   member this.PagesOfType ty =
     this.pages
-      |> Seq.filter (function
+      |> Array.filter (function
         | { metadata = ValueSome md } when md.PageType = ty -> true
         | _ -> false)
-      |> Seq.cache
   
   member this.PagesOfTag tag =
     this.pages
-      |> Seq.filter (function
+      |> Array.filter (function
         | { metadata = ValueSome md } when md.Tags |> List.contains tag -> true
         | _ -> false)
-      |> Seq.cache
 
   member this.PagesOfMonth year month =
     this.pages
-      |> Seq.filter (function
+      |> Array.filter (function
         | { metadata = ValueSome md } ->
-          md.Date |> Option.map (fun d -> d.Year = year && d.Month = month) ?| false
+          md.Date
+          |> Option.map (fun d -> d.Year = year && d.Month = month)
+          |> Option.defaultValue false
         | _ -> false)
-      |> Seq.cache
 
   member this.PrevNextPostFinder = this.Cache.PrevNextPostFinder.Value
 
@@ -183,16 +179,15 @@ module Context =
       ctx with
         pages =
           ctx.pages 
-            |> Seq.sortByDescending (
+            |> Array.sortByDescending (
               fun x ->
                 match x.metadata with
                   | ValueSome md -> md.Date
                   | ValueNone -> None
               )
-            |> Seq.toArray
     }
 
-  let inline private clearCache ctx = { ctx with cache = None }
+  let inline private clearCache ctx = { ctx with cache = ValueNone }
   
   /// adds all files found in the source directory to the current context.
   let private addAllSourceFiles (ctx: Context) =
@@ -206,7 +201,8 @@ module Context =
         let pages =
           Directory.enumerateFilesRecursively false ctx.SourceDir
           |> Seq.map (fun file -> getPageInfo ctx.SourceDir file ctx)
-        { ctx with pages = Seq.append ctx.pages pages }
+          |> Seq.toArray
+        { ctx with pages = Array.append ctx.pages pages }
   
   /// get a TemplateInfo from the path.
   let private getTemplateInfo (path: string) ctx =
@@ -230,9 +226,9 @@ module Context =
   /// loads the theme to the current context.
   let private loadTheme (ctx: Context) =
     let themeFolder =
-      Path.Combine(
-        ctx.ConfigDir,
-        Path.Combine(ctx.config.ThemesDir, ctx.config.Theme))
+      Path.combineMany [|
+        ctx.ConfigDir;
+        ctx.config.ThemesDir; ctx.config.Theme |]
     
     let ctx =
       tryOperation ctx "loadThemeTemplates" themeFolder <| fun () ->
@@ -250,7 +246,7 @@ module Context =
             Directory.enumerateFilesRecursively false templatesDir
             |> Seq.map (fun file -> getTemplateInfo file ctx)
           let newMap =
-            Seq.append mp (Map.toSeq ctx.templates) |> Map.ofSeq
+            Map.append (Map.ofSeq mp) ctx.templates
           { ctx with templates = newMap }
 
     tryOperation ctx "loadThemeSource" themeFolder <| fun () ->
@@ -259,7 +255,8 @@ module Context =
         let pages =
           Directory.enumerateFilesRecursively false sourceDir
           |> Seq.map (fun file -> getPageInfo sourceDir file ctx)
-        { ctx with pages = Seq.append ctx.pages pages }
+          |> Seq.toArray
+        { ctx with pages = Array.append ctx.pages pages }
       else ctx
   
   /// creates a new context from the given configuration file and (optionally) a logger.
@@ -274,7 +271,7 @@ module Context =
           | None ->
             Environment.CurrentDirectory
             |> Directory.GetFiles
-            |> Seq.tryFind (fun file ->
+            |> Array.tryFind (fun file ->
                 match
                   Path.GetFileNameWithoutExtension file,
                   Path.GetExtension file with
@@ -295,10 +292,10 @@ module Context =
       {
         configLocation = location
         config = blogConf
-        pages = []
+        pages = Array.empty
         templates = Map.empty
         logger = logger
-        cache = None
+        cache = ValueNone
       } |> loadTheme |> addAllSourceFiles |> sortPagesAndCache |> clearCache
     with
       | ( :? DirectoryNotFoundException
@@ -306,5 +303,3 @@ module Context =
         | :? FileNotFoundException) & ex ->
         logger.error "problem loading flex.toml: %s" ex.Message
         reraise' ex
-
-   

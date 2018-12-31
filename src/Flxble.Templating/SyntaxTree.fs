@@ -105,13 +105,13 @@ type ScriptObject =
         | Array xs ->
           let xs' =
             if index >= 0 then
-              xs |> Seq.tryItem index
+              xs |> Seq.tryItem' index
             else
-              xs |> Seq.rev |> Seq.tryItem (-index-1)
-          xs' ?| Null (EqualityNull (lazy "index out of range"))
+              xs |> Seq.rev |> Seq.tryItem' (-index-1)
+          xs' |> defaultValueArg <| Null (EqualityNull (lazy "index out of range"))
         | String s ->
-          s |> Seq.tryItem index |> Option.map (string >> String)
-          ?| Null (EqualityNull (lazy "index out of range"))
+          s |> Seq.tryItem' index |> ValueOption.map (string >> String)
+          |> defaultValueArg <| Null (EqualityNull (lazy "index out of range"))
         | Null _ -> this
         | _ -> Null (EqualityNull (lazy "not an array"))
 
@@ -137,7 +137,7 @@ type ScriptObject =
           | _ -> Null (EqualityNull (lazy "not a function"))
       apply args this
 
-and [<Struct; StructuredFormatDisplay("{AsString}")>] ScriptInfo = {
+and [<StructuredFormatDisplay("{AsString}")>] ScriptInfo = {
   location: SourceLocation
 } with
   member this.AsString = to_s this.location

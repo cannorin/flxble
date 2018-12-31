@@ -531,14 +531,14 @@ module ValueOption =
   let inline map mapping option = match option with ValueNone -> ValueNone | ValueSome x -> ValueSome (mapping x)
 
   let inline map2 mapping option1 option2 = 
-      match option1, option2 with
-      | ValueSome x, ValueSome y -> ValueSome (mapping x y)
-      | _ -> ValueNone
+    match option1, option2 with
+    | ValueSome x, ValueSome y -> ValueSome (mapping x y)
+    | _ -> ValueNone
 
   let inline map3 mapping option1 option2 option3 = 
-      match option1, option2, option3 with
-      | ValueSome x, ValueSome y, ValueSome z -> ValueSome (mapping x y z)
-      | _ -> ValueNone
+    match option1, option2, option3 with
+    | ValueSome x, ValueSome y, ValueSome z -> ValueSome (mapping x y z)
+    | _ -> ValueNone
 
   let inline bind binder option = match option with ValueNone -> ValueNone | ValueSome x -> binder x
 
@@ -580,11 +580,11 @@ module ValueOptionExtension =
   open System.Collections.Generic
   
   module Array =
-    let tryLast' (array: _[]) =
+    let inline tryLast' (array: _[]) =
       if array.Length = 0 then None
       else Some array.[array.Length-1]
 
-    let tryHead' (array: _[]) =
+    let inline tryHead' (array: _[]) =
       if array.Length = 0 then None
       else Some array.[0]
 
@@ -594,30 +594,31 @@ module ValueOptionExtension =
       else if Array.length xs = length then Some xs
       else None
 
-    let tryItem' index (array: _[]) =
+    let inline tryItem' index (array: _[]) =
       if index < 0 || index >= array.Length then None
       else Some (array.[index])
     
-    let tryFind' predicate (array: _[]) =
+    let inline tryFind' predicate (array: _[]) =
       let rec loop i =
         if i >= array.Length then None else
         if predicate array.[i] then Some array.[i] else loop (i+1)
       loop 0
 
-    let tryFindIndex' predicate (array: _[]) =
+    let inline tryFindIndex' predicate (array: _[]) =
       let len = array.Length
       let rec go n = if n >= len then None elif predicate array.[n] then Some n else go (n+1)
       go 0
 
-
   module IEnumerator =
-    let rec tryItem' index (e : IEnumerator<'T>) =
-      if not (e.MoveNext()) then None
-      elif index = 0 then Some(e.Current)
-      else tryItem' (index-1) e
+    let inline tryItem' index (e : IEnumerator<'T>) =
+      let rec loop index =
+        if not (e.MoveNext()) then None
+        elif index = 0 then Some(e.Current)
+        else loop (index-1)
+      loop index
     
   module Seq =
-    let tryLast' (source : seq<_>) =
+    let inline tryLast' (source : seq<_>) =
       use e = source.GetEnumerator()
       if e.MoveNext() then
         let mutable res = e.Current
@@ -626,7 +627,7 @@ module ValueOptionExtension =
       else
         None
 
-    let tryHead' (source : seq<_>) =
+    let inline tryHead' (source : seq<_>) =
       use e = source.GetEnumerator()
       if (e.MoveNext()) then Some e.Current
       else None
@@ -637,12 +638,12 @@ module ValueOptionExtension =
         xs' |> Seq.take length |> Seq.map snd |> Some
       else None
 
-    let tryItem' index (source : seq<'T>) =
+    let inline tryItem' index (source : seq<'T>) =
       if index < 0 then None else
       use e = source.GetEnumerator()
       IEnumerator.tryItem' index e
     
-    let tryFind' predicate (source : seq<'T>)  =
+    let inline tryFind' predicate (source : seq<'T>)  =
       use e = source.GetEnumerator()
       let mutable res = None
       while (ValueOption.isNone res && e.MoveNext()) do
@@ -650,7 +651,7 @@ module ValueOptionExtension =
         if predicate c then res <- Some(c)
       res
 
-    let tryFindIndex' predicate (source:seq<_>) =
+    let inline tryFindIndex' predicate (source:seq<_>) =
       use ie = source.GetEnumerator()
       let rec loop i =
         if ie.MoveNext() then
@@ -660,42 +661,71 @@ module ValueOptionExtension =
         else
           None
       loop 0
+
+    let inline choose' chooser (source: seq<_>) =
+      seq {
+        for item in source do
+          match chooser item with
+            | ValueSome x -> yield x
+            | ValueNone -> ()
+      }
   
   module List =
-    let rec tryLast' (list: 'T list) =
-      match list with
-      | [x] -> Some x
-      | _ :: tail -> tryLast' tail
-      | [] -> None
+    let inline tryLast' (list: 'T list) =
+      let rec loop list =
+        match list with
+        | [x] -> Some x
+        | _ :: tail -> loop tail
+        | [] -> None
+      loop list
 
-    let tryHead' list = match list with x::_ -> Some x | [] -> None
+    let inline tryHead' list = match list with x::_ -> Some x | [] -> None
 
-    let rec tryItem' index list =
-      match list with
-      | h::t when index >= 0 ->
-          if index = 0 then Some h else tryItem' (index - 1) t
-      | _ -> None
+    let inline tryItem' index list =
+      let rec loop index list =
+        match list with
+        | h::t when index >= 0 ->
+            if index = 0 then Some h else loop (index - 1) t
+        | _ -> None
+      loop index list
 
     let inline tryTake' length xs =
       if List.length xs >= length then
         List.take length xs |> Some
       else None
 
-    let rec tryFind' predicate list =
-      match list with
-      | [] -> None
-      | h::t -> if predicate h then Some h else tryFind' predicate t
+    let inline tryFind' predicate list =
+      let rec loop list =
+        match list with
+        | [] -> None
+        | h::t -> if predicate h then Some h else loop t
+      loop list
 
-    let tryFindIndex' predicate list = 
+    let inline tryFindIndex' predicate list = 
       let rec loop n = function[] -> None | h::t -> if predicate h then Some n else loop (n+1) t
       loop 0 list
 
+    let inline choose' chooser list =
+      List.foldBack (fun x state ->
+        match chooser x with
+          | ValueSome x -> x :: state
+          | ValueNone -> state
+      ) [] list
+
   module Map =
-    let tryFind' key (table: Map<_, _>) =
+    let inline tryFind' key (table: Map<_, _>) =
       let mutable v = Unchecked.defaultof<_>
       if table.TryGetValue(key, &v) then
         Some v
       else None
+
+    let inline choose' c m =
+      m |> Map.fold (
+        fun newMap k v ->
+          match c k v with
+            | ValueSome x -> newMap |> Map.add k x
+            | ValueNone   -> newMap
+      ) Map.empty
 
 // from: ComputationExpressions.fs
 [<AutoOpen>]

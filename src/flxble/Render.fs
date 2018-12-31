@@ -1,8 +1,5 @@
 module Flxble.Render
-open System
 open System.IO
-open System.Threading
-open System.Threading.Tasks
 open FSharp.Collections
 open Flxble.Configuration
 open Flxble.Models
@@ -136,18 +133,19 @@ let private renderArchive archiveType tempName elements predicate title printer 
               ctx.config.Theme tempName)
     let pages =
       ctx.pages
-      |> Seq.filter (fun x ->
-          x.metadata.IsSome && (x.format = PageFormat.Html || x.format = PageFormat.Markdown))
-      |> Seq.map (fun x -> x.metadata.Value, x |> ScriptObject.from)
-      |> Seq.cache
+      |> Array.choose (fun x ->
+          if x.metadata.IsSome && (x.format = PageFormat.Html || x.format = PageFormat.Markdown) then
+            Some (x.metadata.Value, x |> ScriptObject.from)
+          else None)
     seq {
-      for elementChunk in elements |> Seq.chunkBySize synchronousRenderCount do
+      for elementChunk in elements |> Array.chunkBySize synchronousRenderCount do
         yield async {
           for element in elementChunk do
             let pagesObj = 
               pages
-                |> Seq.filter (fun (x, _) -> predicate element x)
-                |> Seq.map    snd
+                |> Array.filter (fun (x, _) -> predicate element x)
+                |> Array.map    snd
+                |> Array.toSeq
                 |> ScriptObject.Array
 
             let archiveObj =
@@ -186,7 +184,7 @@ let private renderTagArchive (ctx: Context) sobj =
       (fun tag x -> x.Tags |> List.contains tag)
       (sprintf "Tag: %s")
       WebUtility.UrlEncode dir ctx sobj)
-  ?| Seq.empty
+  |> Option.defaultValue Seq.empty
 
 let private renderMonthlyArchive (ctx: Context) sobj =
   let inline getMonthName i =
@@ -199,7 +197,7 @@ let private renderMonthlyArchive (ctx: Context) sobj =
       (fun d -> sprintf "Archive: %s %i" (getMonthName d.Month) d.Year)
       (fun d -> sprintf "%i-%i" d.Year d.Month)
       dir ctx sobj)
-  ?| Seq.empty
+  |> Option.defaultValue Seq.empty
 
 let private copyContent (ctx: Context) =
   let srcContent =
@@ -286,7 +284,7 @@ let everything (ctx: Context) =
         yield! renderTagArchive ctx renderCtx
         yield! renderMonthlyArchive ctx renderCtx
 
-        for pageChunk in ctx.pages |> Seq.chunkBySize synchronousRenderCount do
+        for pageChunk in ctx.pages |> Array.chunkBySize synchronousRenderCount do
         // for page in ctx.pages do
           yield async {
             for page in pageChunk do

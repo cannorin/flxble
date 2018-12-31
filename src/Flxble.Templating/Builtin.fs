@@ -131,17 +131,17 @@ let inline defaultBindings (culture: CultureInfo) =
     // logical
     yield "||", fnlazy 2 (fun xs ->
       let xs = Seq.cache xs
-      match xs |> Seq.tryItem 0 with
-        | Some (Bool false | Null _) -> Seq.tryItem 1 xs ?| err 2 "||" xs
-        | Some _ -> Bool true
-        | None -> err 2 "||" xs
+      match xs |> Seq.tryItem' 0 with
+        | ValueSome (Bool false | Null _) -> Seq.tryItem' 1 xs |> defaultValueArg <| err 2 "||" xs
+        | ValueSome _ -> Bool true
+        | ValueNone -> err 2 "||" xs
     )
     yield "&&", fnlazy 2 (fun xs ->
       let xs = Seq.cache xs
-      match xs |> Seq.tryItem 0 with
-        | Some (Bool false | Null _) -> Bool false
-        | Some _ -> Seq.tryItem 1 xs ?| err 2 "&&" xs
-        | None -> err 2 "&&" xs
+      match xs |> Seq.tryItem' 0 with
+        | ValueSome (Bool false | Null _) -> Bool false
+        | ValueSome _ -> Seq.tryItem' 1 xs |> defaultValueArg <| err 2 "&&" xs
+        | ValueNone -> err 2 "&&" xs
     )
     yield "not", fn 1 (function
       | [Bool false] | [Null _] -> Bool true

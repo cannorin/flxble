@@ -27,6 +27,7 @@ type PageFormat =
   /// will be copied as-is.
   | Other
 
+[<Struct>]
 type PageInfo = {
   /// location of the file relative to ${source}.
   relativeLocation: string 
@@ -58,6 +59,7 @@ type PageInfo = {
         this.scriptObjectMap <- ValueSome map
         map
 
+[<Struct>]
 type TemplateInfo = {
   name: string
   dependsOn: string voption

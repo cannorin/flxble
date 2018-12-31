@@ -117,8 +117,6 @@ tags   = [ 'test', 'blog', 'example' ]
 "
 
 module PageMetaData =
-  open System.Globalization
-
   let empty =
     let emptyMetadata = sprintf @"
 type = 'none'
@@ -133,14 +131,13 @@ tags = []
   let tryExtract str =
     let lines =
       str |> String.splitSeq ["\r\n"; "\r"; "\n"]
-          |> Seq.cache
     let inline isMetadataBlockSeparator str =
          str |> String.forall (fun c -> c = '-' || Char.IsWhiteSpace c)
       && str |> String.contains "---"
     let sections =
       lines |> Seq.splitWith isMetadataBlockSeparator
-            |> Seq.filter (Seq.isEmpty >> not)
-            |> Seq.filter (Seq.forall String.IsNullOrWhiteSpace >> not)
+            |> Seq.filter (fun x ->
+              not (Seq.isEmpty x) && not (x |> Seq.forall String.IsNullOrWhiteSpace))
     if Seq.length sections >= 2 then
       let metaBlock = sections |> Seq.item 0
       let length = Seq.length metaBlock

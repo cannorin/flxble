@@ -14,6 +14,7 @@ module TemplateContext =
   let create culture commentize =
     {
       bindings = Builtin.defaultBindings culture
+      partials = Map.empty
       culture = culture
       commentize = commentize
     }
@@ -26,6 +27,14 @@ module TemplateContext =
   /// Appends a `binding` to the context.
   let inline addMany bindings ctx =
     { ctx with bindings = Map.append ctx.bindings bindings }
+
+  /// Adds a partial template to the context.
+  let inline addPartial name template ctx = { ctx with partials = ctx.partials |> Map.add name template }
+
+  /// Adds partial templates to the context.
+  let inline addPartials partials ctx =
+    { ctx with partials = Map.append ctx.partials partials }
+
 
 exception TemplateParseFailed of msg:string
   with
@@ -77,23 +86,8 @@ module Template =
       | [] -> ()
       | statement :: rest ->
         match statement with
-          | Define (var, value) ->
-            exec (ctx |> TemplateContext.add var (eval ctx.bindings value)) rest
-          | Open record ->
-            match eval ctx.bindings record with
-              | Record m ->
-                exec { ctx with bindings = Map.append ctx.bindings m } rest
-              | _ ->
-                let loc =
-                  match record.info with
-                    | ValueSome i -> sprintf " (at %s)" (to_s i.location)
-                    | ValueNone -> ""
-                loc |> sprintf "open failed, not a record%s"
-                    |> ctx.commentize
-                    |> writer.Write
-                exec ctx rest
-          | Block scr ->
-            exec ctx scr
+          | YieldText str ->
+            writer.Write str
             exec ctx rest
           | When (cond, a, b) ->
             match eval ctx.bindings cond with
@@ -117,9 +111,43 @@ module Template =
             (eval ctx.bindings obj).AsCulturalString ctx.culture ctx.commentize
             |> writer.Write
             exec ctx rest
-          | YieldText str ->
-            writer.Write str
+          | Define (var, value) ->
+            exec (ctx |> TemplateContext.add var (eval ctx.bindings value)) rest
+          | Open record ->
+            match eval ctx.bindings record with
+              | Record m ->
+                exec { ctx with bindings = Map.append ctx.bindings m } rest
+              | _ ->
+                let loc =
+                  match record.info with
+                    | ValueSome i -> sprintf " (at %s)" (to_s i.location)
+                    | ValueNone -> ""
+                loc |> sprintf "open failed, not a record%s"
+                    |> ctx.commentize
+                    |> writer.Write
+                exec ctx rest
+          | Partial (name, record) ->
+            match ctx.partials |> Map.tryFind' name with
+              | ValueSome template ->
+                match eval ctx.bindings record with
+                  | Record m ->
+                    exec (ctx |> TemplateContext.addMany m) template
+                  | _ ->
+                    let loc =
+                      match record.info with
+                        | ValueSome i -> sprintf " (at %s)" (to_s i.location)
+                        | ValueNone -> ""
+                    loc |> sprintf "partial failed, the argument is not a record%s"
+                        |> ctx.commentize
+                        |> writer.Write
+              | ValueNone ->
+                sprintf "partial failed, the partial template '%s' is not registered" name
+                |> ctx.commentize |> writer.Write
             exec ctx rest
+          | Block scr ->
+            exec ctx scr
+            exec ctx rest
+
     exec context script
 
   /// Renders the `script` to a string with the `context`.

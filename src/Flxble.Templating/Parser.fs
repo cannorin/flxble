@@ -234,6 +234,11 @@ let template : parser<Template> = recursive <| fun statements ->
       | Item ((name, args), expr) as x ->
         Define (name, Lambda (args, expr) |> With.sameInfoOf x)
 
+  let inline partialClause (sc: #sc<_>) =
+    sc.ws (syn "partial") >>. sc.ws name .>>. expr sc
+    |>> Partial
+
+
   let inline whenClause (sc: #sc<_>) =
     sc.ws (syn "when") >>. sc.ws (expr sc) .>> syn "do"
 
@@ -308,6 +313,7 @@ let template : parser<Template> = recursive <| fun statements ->
     >>. choice [
       clause "open <record>" openClause
       clause "def <variable> = <expr>" defineClause
+      clause "partial <name> <expr>" partialClause
       whenStatement
       forStatement
       beginStatement

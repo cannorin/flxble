@@ -164,6 +164,8 @@ type ScriptStatement =
   | Open of ScriptExprWithInfo
   /// %%def NAME = EXPR
   | Define of string * ScriptExprWithInfo
+  /// %%partial NAME EXPR
+  | Partial of string * ScriptExprWithInfo
   /// %%begin
   /// ...
   /// %%end

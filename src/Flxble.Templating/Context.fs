@@ -6,6 +6,7 @@ open System.Globalization
 module Context =
   type TemplateContext = {
     bindings: Map<string, ScriptObject>
+    partials: Map<string, Template>
     /// will be used to format datetimes
     culture: CultureInfo
     /// function to print an error message as a comment

@@ -55,7 +55,7 @@ type StructuralFunction<'a, 'b> =
 
 /// Value of which equality completely ignored.
 /// Any value of this type will be treated as equal.
-[<CustomEquality; CustomComparison; StructuredFormatDisplay("{AsString}")>]
+[<CustomEquality; CustomComparison; StructuredFormatDisplay("{AsString}"); Struct>]
 type EqualityNull<'T> =
   | EValue of 'T
   | ENull
@@ -64,16 +64,10 @@ type EqualityNull<'T> =
     match this with
       | EValue value -> sprintf "EqualityNull (%A)" value
       | ENull        -> sprintf "EqualityNull"
-  override x.Equals(yobj) =
-    match yobj with
-      | :? EqualityNull<'T> -> true
-      | _ -> false
+  override x.Equals(yobj) = true
   override x.GetHashCode() = 0
   interface IComparable with
-    member x.CompareTo yo =
-      match yo with
-        | :? EqualityNull<'T> -> 0
-        | _ -> invalidArg "yo" "cannot compare values of different types"
+    member x.CompareTo _ = 0
 
 /// Creates an instance of `EqualityNull<_>`.
 let inline EqualityNull x : EqualityNull<_> = EValue x

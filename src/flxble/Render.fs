@@ -11,7 +11,7 @@ open Markdig
 open System.Net
 
 [<Literal>]
-let synchronousRenderCount = 30
+let synchronousRenderCount = 50
 
 let rec private applyTemplateToHtml ctx renderCtx localVariables templateName html fileName =
   tryOperation ctx "applyTemplateToHtml" fileName <| fun () ->
@@ -65,10 +65,6 @@ let private generatePipeline ctx =
 
 let private renderPageToOutput ctx templateCtx pipeline page =
   tryOperation ctx "renderPageToOutput" page.relativeLocation <| fun () ->
-    if Directory.Exists ctx.OutputDir |> not then
-      ctx.logger.warning "the output directory '%s' does not exist, creating." ctx.config.OutputDir
-      Directory.CreateDirectory(ctx.OutputDir) |> ignore
-
     match page.format with
       | PageFormat.Html
       | PageFormat.Markdown ->
@@ -82,14 +78,16 @@ let private renderPageToOutput ctx templateCtx pipeline page =
         let prevnextObjs = [|
           match page.metadata with
             | ValueNone -> ()
-            | ValueSome _ ->
+            | ValueSome metadata ->
               let prev, next = ctx.FindPrevNextPost page
               match prev with
-                | ValueSome x -> yield "prev_date_page", ScriptObject.from x
-                | ValueNone -> ()
+                | ValueSome x when x.metadata.Value.PageType = metadata.PageType ->
+                  yield "prev_date_page", ScriptObject.from x
+                | _ -> ()
               match next with
-                | ValueSome x -> yield "next_date_page", ScriptObject.from x
-                | ValueNone -> ()
+                | ValueSome x when x.metadata.Value.PageType = metadata.PageType ->
+                  yield "next_date_page", ScriptObject.from x
+                | _ -> ()
         |]
 
         let renderCtx = 
@@ -138,6 +136,11 @@ let private renderArchive archiveType tempName elements predicate title printer 
           if x.metadata.IsSome && (x.format = PageFormat.Html || x.format = PageFormat.Markdown) then
             Some (x.metadata.Value, x |> ScriptObject.from)
           else None)
+    
+    let outputDir = Path.Combine(ctx.OutputDir, outDir)
+    if Directory.Exists outputDir |> not then
+      Directory.CreateDirectory(outputDir) |> ignore
+    
     seq {
       for elementChunk in elements |> Array.chunkBySize synchronousRenderCount do
         yield async {
@@ -156,12 +159,6 @@ let private renderArchive archiveType tempName elements predicate title printer 
               |] |> Map.ofArray
 
             let renderCtx = renderCtx |> TemplateContext.addMany archiveObj
-          
-            let outputDir = Path.Combine(ctx.OutputDir, outDir)
-
-            if Directory.Exists outputDir |> not then
-              ctx.logger.warning "the output directory '%s' does not exist, creating." outputDir
-              Directory.CreateDirectory(outputDir) |> ignore
           
             let outPath = Path.Combine(outputDir, sprintf "%s.html" <| printer element)
             ctx.logger.trace "generating '%s'..." outPath
@@ -269,6 +266,9 @@ let private generateRssFeed (ctx: Context) =
 /// Render everything in the current context.
 let everything (ctx: Context) =
   tryOperation ctx "Render.everything" "current context" <| fun () ->
+    if Directory.Exists ctx.OutputDir |> not then
+      Directory.CreateDirectory(ctx.OutputDir) |> ignore
+
     let pipeline = generatePipeline ctx
     let renderCtx =
       let rctx = TemplateContext.create ctx.Culture (sprintf "<!-- %s -->")
@@ -289,9 +289,10 @@ let everything (ctx: Context) =
               ctx.logger.trace "processing file '%s'..." page.absoluteLocation
               renderPageToOutput ctx renderCtx pipeline page
           }
-       } |> Async.Parallel
-         |> Async.Catch
-         |> Async.RunSynchronously
+      } |> Async.Parallel
+        |> Async.Ignore
+        |> Async.Catch
+        |> Async.RunSynchronously
 
     match result with
       | Choice2Of2 exn -> reraise' exn

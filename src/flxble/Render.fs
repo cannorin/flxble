@@ -1,5 +1,6 @@
 module Flxble.Render
 open System.IO
+open System.Threading.Tasks
 open FSharp.Collections
 open Flxble.Configuration
 open Flxble.Models
@@ -143,7 +144,7 @@ let private renderArchive archiveType tempName elements predicate title printer 
     
     seq {
       for elementChunk in elements |> Array.chunkBySize synchronousRenderCount do
-        yield async {
+        yield fun () ->
           for element in elementChunk do
             let pagesObj = 
               pages
@@ -170,7 +171,6 @@ let private renderArchive archiveType tempName elements predicate title printer 
                 | ValueNone -> h
             
             File.WriteAllText(outPath, html)
-        }
     }
 
 let private renderTagArchive (ctx: Context) sobj =
@@ -220,48 +220,45 @@ let private copyContent (ctx: Context) =
 
 open System.Xml
 let private generateRssFeed (ctx: Context) =
-  let inline writeElementStringAsync name value (writer: XmlWriter) =
-    writer.WriteElementStringAsync("", name, "", value)
-  let inline writeStartElementAsync name (writer: XmlWriter) =
-    writer.WriteStartElementAsync("", name, "")
+  let inline writeElementString name value (writer: XmlWriter) =
+    writer.WriteElementString("", name, "", value)
+  let inline writeStartElement name (writer: XmlWriter) =
+    writer.WriteStartElement("", name, "")
   
-  async {
-    let rssLocation =
-      Path.combine ctx.OutputDir "rss.xml"
-    let settings = new XmlWriterSettings()
-    do settings.Async <- true
-    use writer = XmlWriter.Create(rssLocation, settings)
-    do! writer.WriteStartDocumentAsync()
-    do! writer |> writeStartElementAsync "rss"
-    do! writer |> writeElementStringAsync "version" "2.0"
-    do! writer |> writeStartElementAsync "channel"
-    do! writer |> writeElementStringAsync "title" ctx.config.Title
-    do! writer |> writeElementStringAsync "link"  ctx.config.BaseUrl
-    do! writer |> writeElementStringAsync "description" ctx.config.Description
-    if ctx.config.Copyright.IsSome then
-      do! writer |> writeElementStringAsync "copyright" ctx.config.Copyright.Value
-    for page in ctx.pages do
-      if page.PageType = PageType.Post then
-        do! writer |> writeStartElementAsync "item"
-        do! 
-          writer |> writeElementStringAsync "link"
-            (Path.ChangeExtension(page.relativeLocation, "html")
-             |> Path.combine ctx.config.BaseUrl)
-        match page.metadata with
-          | ValueSome meta ->
-            do! writer |> writeElementStringAsync "title" meta.Title
-            do! writer |> writeElementStringAsync "description" meta.Description
-            match meta.Date with
-              | Some date ->
-                do! writer |> writeElementStringAsync "pubDate" (date.ToString("r"))
-              | None -> ()
-          | ValueNone -> ()
-        do! writer.WriteEndElementAsync()
-    do! writer.WriteEndElementAsync()
-    do! writer.WriteEndElementAsync()
-    do! writer.WriteEndDocumentAsync()
-    do! writer.FlushAsync()
-  }
+  let rssLocation =
+    Path.combine ctx.OutputDir "rss.xml"
+  let settings = new XmlWriterSettings()
+  use writer = XmlWriter.Create(rssLocation, settings)
+  do writer.WriteStartDocument()
+  do writer |> writeStartElement "rss"
+  do writer |> writeElementString "version" "2.0"
+  do writer |> writeStartElement "channel"
+  do writer |> writeElementString "title" ctx.config.Title
+  do writer |> writeElementString "link"  ctx.config.BaseUrl
+  do writer |> writeElementString "description" ctx.config.Description
+  if ctx.config.Copyright.IsSome then
+    do writer |> writeElementString "copyright" ctx.config.Copyright.Value
+  for page in ctx.pages do
+    if page.PageType = PageType.Post then
+      do writer |> writeStartElement "item"
+      do 
+        writer |> writeElementString "link"
+          (Path.ChangeExtension(page.relativeLocation, "html")
+           |> Path.combine ctx.config.BaseUrl)
+      match page.metadata with
+        | ValueSome meta ->
+          do writer |> writeElementString "title" meta.Title
+          do writer |> writeElementString "description" meta.Description
+          match meta.Date with
+            | Some date ->
+              do writer |> writeElementString "pubDate" (date.ToString("r"))
+            | None -> ()
+        | ValueNone -> ()
+      do writer.WriteEndElement()
+  do writer.WriteEndElement()
+  do writer.WriteEndElement()
+  do writer.WriteEndDocument()
+  do writer.Flush()
 
 /// Render everything in the current context.
 let everything (ctx: Context) =
@@ -274,28 +271,21 @@ let everything (ctx: Context) =
       let rctx = TemplateContext.create ctx.Culture (sprintf "<!-- %s -->")
       rctx |> TemplateContext.addMany (ctx.ToScriptObjectMap())
 
-    let result =
+    let tasks =
       seq {
-        yield generateRssFeed ctx
-        yield async { copyContent ctx }
+        yield fun () -> generateRssFeed ctx
+        yield fun () -> copyContent ctx
 
         yield! renderTagArchive ctx renderCtx
         yield! renderMonthlyArchive ctx renderCtx
 
         for pageChunk in ctx.pages |> Array.chunkBySize synchronousRenderCount do
         // for page in ctx.pages do
-          yield async {
+          yield fun () ->
             for page in pageChunk do
               ctx.logger.trace "processing file '%s'..." page.absoluteLocation
               renderPageToOutput ctx renderCtx pipeline page
-          }
-      } |> Async.Parallel
-        |> Async.Ignore
-        |> Async.Catch
-        |> Async.RunSynchronously
+      }
 
-    match result with
-      | Choice2Of2 exn -> reraise' exn
-      | _ -> ()
-    
+    Parallel.ForEach(tasks, fun f -> f()) |> ignore
 

@@ -195,7 +195,7 @@ module ScriptExpr =
         | ValueNone -> s
     ) format
 
-  let inline err msg = Null (EValue msg)
+  let inline private err msg = Null (EValue msg)
 
   /// Evaluates the given `expr` to a `ScripeObject` with the `context`.
   /// If there was an error, `Null (EValue errorMessage)` will be returned.

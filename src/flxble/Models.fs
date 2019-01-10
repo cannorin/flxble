@@ -2,6 +2,7 @@ module Flxble.Models
 open Flxble.Configuration
 open Flxble.Templating
 open System.IO
+open System.Text
 
 /// Page type. Also specifies which template to apply.
 [<RequireQualifiedAccess; Struct>]
@@ -59,6 +60,27 @@ type PageInfo = {
           |> Map.add "location" (SyntaxTree.ScriptObject.String location)
         this.scriptObjectMap <- ValueSome map
         map
+  /// loads a PageInfo from the path.
+  static member load sourceDir (absolutePath: string) =
+    let absPath = Path.GetFullPath absolutePath
+    let content = File.ReadAllText absPath
+    let (metadata, content) = PageMetaData.tryExtract content
+    let relativePath =
+      absPath |> Path.makeRelativeTo sourceDir
+    let pageFormat =
+      match Path.GetExtension absPath with
+        | ".md" | ".markdown" -> PageFormat.Markdown
+        | ".htm" | ".html" -> PageFormat.Html
+        | _ -> PageFormat.Other
+    {
+      relativeLocation = relativePath
+      absoluteLocation = absPath
+      format   = pageFormat
+      metadata = metadata
+      content  = content
+      scriptObjectMap = ValueNone
+      index = ValueNone
+    }
 
 [<Struct>]
 type TemplateInfo = {
@@ -79,3 +101,22 @@ type TemplateInfo = {
           |> Map.add "template_name" (SyntaxTree.ScriptObject.String this.name)
         this.scriptObjectMap <- ValueSome map
         map
+  /// loads a TemplateInfo from the path.
+  static member load (path: string) =
+    let absPath = Path.GetFullPath path
+    let toml, template =
+      let encoding = Encoding.UTF8
+      Template.loadFileWithTomlMetadata encoding absPath
+    let metadata = toml |> Option.map PageMetaData
+    let dependency =
+      metadata |> Option.map (fun md -> md.PageType)
+    let name = Path.GetFileNameWithoutExtension absPath
+    name, {
+      name = name
+      dependsOn = dependency |> ValueOption.ofOption
+      metadata = metadata |> ValueOption.ofOption
+      template = template
+      scriptObjectMap = ValueNone
+    }
+
+

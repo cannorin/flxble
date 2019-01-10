@@ -64,6 +64,17 @@ let private generatePipeline ctx =
       |> customize
       |> fun x -> x.Build()
 
+let inline internal renderPage templateCtx pipeline (page: PageInfo) =
+  let pageVariables = page.ToScriptObjectMap()
+  let renderCtx = templateCtx |> TemplateContext.addMany pageVariables
+  match page.format with
+    | PageFormat.Markdown ->
+      Markdown.ToHtml(page.content, pipeline)
+    | PageFormat.Html ->
+      Template.loadString page.absoluteLocation page.content
+      |> Template.renderToString renderCtx
+    | _ -> failwith "impossible"
+
 let private renderPageToOutput ctx templateCtx pipeline page =
   tryOperation ctx "renderPageToOutput" page.relativeLocation <| fun () ->
     match page.format with
@@ -73,8 +84,6 @@ let private renderPageToOutput ctx templateCtx pipeline page =
         let path = Path.Combine(ctx.OutputDir, location)
 
         ctx.logger.trace "generating '%s'..." path
-
-        let pageVariables = page.ToScriptObjectMap()
 
         let prevnextObjs = [|
           match page.metadata with
@@ -92,17 +101,9 @@ let private renderPageToOutput ctx templateCtx pipeline page =
         |]
 
         let renderCtx = 
-          templateCtx |> TemplateContext.addMany pageVariables
-                      |> TemplateContext.addMany (Map.ofArray prevnextObjs)
+          templateCtx |> TemplateContext.addMany (Map.ofArray prevnextObjs)
 
-        let content =
-          match page.format with
-            | PageFormat.Markdown ->
-              Markdown.ToHtml(page.content, pipeline)
-            | PageFormat.Html ->
-              Template.loadString page.absoluteLocation page.content
-              |> Template.renderToString renderCtx
-            | _ -> failwith "impossible"
+        let content = renderPage renderCtx pipeline page
 
         let html =
           match page.metadata with
@@ -270,6 +271,7 @@ let everything (ctx: Context) =
     let renderCtx =
       let rctx = TemplateContext.create ctx.Culture (sprintf "<!-- %s -->")
       rctx |> TemplateContext.addMany (ctx.ToScriptObjectMap())
+           |> TemplateContext.addPartials (ctx.templates |> Map.map (fun _ v -> v.template))
 
     let tasks =
       seq {

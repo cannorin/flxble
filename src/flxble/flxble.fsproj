@@ -33,7 +33,7 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FSharp.CommandLine" Version="2.2.6831.16169" />
+    <PackageReference Include="FSharp.CommandLine" Version="3.1.3294.2201" />
     <PackageReference Include="Markdig" Version="0.15.5" />
     <PackageReference Include="Scriban" Version="1.2.7" />
   </ItemGroup>

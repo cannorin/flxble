@@ -1,0 +1,54 @@
+---
+  type = "default"
+  body_class = "tag-archive"
+---
+
+<main id="content" class="content" role="main">
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">{{ title }}</h1>
+    </header>
+    %% for page in pages do
+      %% when is_not_null page.title do
+        <article class="post">
+          <header class="post-header">
+            <h1 class="post-title">
+              <a href="{{config.base_url}}/{{page.location}}">
+                {{page.title}}
+              </a>
+            </h1>
+          </header>
+          %% when is_not_null page.description do
+          <section class="post-excerpt">
+            {{ page.description }}
+          </section>
+          %% end
+          <footer class="post-meta">
+            <span class="post-tags">
+              Tags:
+              %% for tag in page.tags do
+                %% when is_not_null config.tag do
+                  <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
+                %% otherwise
+                  <span class="tag-name">{{ tag }}</span>
+                %% end
+              %% end
+            </span>
+            %% when is_not_null page.post_date do
+            %% def date_iso8601 = page.post_date |> date.to_string "o"
+            <time class="post-date" datetime="{{date_iso8601}}">
+              %% when is_not_null config.archive do
+                <a href="{{config.base_url}}/{{config.archive}}/{{page.post_date.year}}-{{page.post_date.month}}.html">
+                {{ page.post_date |> date.to_string "MMM d yyy" }}
+                </a>
+              %% otherwise
+                {{ page.post_date |> date.to_string "MMM d yyy" }}
+              %% end
+            </time>
+            %% end
+          </footer>
+        </article>
+      %% end
+    %% end
+  </article>
+</main>

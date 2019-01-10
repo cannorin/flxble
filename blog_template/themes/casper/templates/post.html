@@ -1,0 +1,80 @@
+---
+  type = "default"
+  body_class = "post-template"
+---
+
+<main class="content" role="main">
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">{{title}}</h1>
+      <section class="post-meta">
+        %% when is_not_null post_date do
+          %% def date_iso8601 = post_date |> date.to_string "o"
+        <time class="post-date" datetime="{{date_iso8601}}">
+          %% when is_not_null config.archive do
+            <a href="{{config.base_url}}/{{config.archive}}/{{post_date.year}}-{{post_date.month}}.html">
+              {{ post_date |> date.to_string "F" }}
+            </a>
+          %% otherwise
+              {{ post_date |> date.to_string "F" }}
+          %% end
+        </time>
+        %% end
+        <span class="tags">
+          <strong>Tags: </strong>
+          %% for tag in tags do
+            %% when is_not_null config.tag do
+              <a href="{{config.base_url}}/{{config.tag}}/{{tag}}.html">{{tag}}</a>
+            %% otherwise
+              <span class="tag-name">{{tag}}</span>
+            %% end
+          %% end
+        </span>
+      </section>
+    </header>
+
+    <section class="post-content">
+      {{ content }}
+    </section>
+
+    <footer class="post-footer">
+      <section class="share">
+        <h4>Share this post</h4>
+        %% begin
+        %% def title = title |> string.url_encode
+        <a class="icon-twitter" href="https://twitter.com/intent/tweet?text={{title}} - "
+           onclick="window.open(this.href+' '+window.location.href, 'twitter-share', 'width=550,height=235');return false;">
+          <span class="hidden">Twitter</span>
+        </a>
+        %% end
+      </section>
+    </footer>
+  </article>
+</main>
+
+<aside class="read-next">
+  %% when is_not_null prev_date_page do
+  <a class="read-next-story prev" href="{{config.base_url}}/{{prev_date_page.location}}">
+    <section class="post">
+      <h2> {{ prev_date_page.title }} </h2>
+      %% when is_not_null prev_date_page.description do
+      <section class="post-excerpt">
+        {{ prev_date_page.description }}
+      </section>
+      %% end
+    </section>
+  </a>
+  %% end
+  %% when is_not_null next_date_page do
+  <a class="read-next-story" href="{{config.base_url}}/{{next_date_page.location}}">
+    <section class="post">
+      <h2> {{ next_date_page.title }} </h2>
+      %% when is_not_null next_date_page.description do
+      <section class="post-excerpt">
+        {{ next_date_page.description }}
+      </section>
+      %% end
+    </section>
+  </a>
+  %% end
+</aside>

@@ -254,3 +254,24 @@ Title: page 3
   tomlDocument%.ofInt@."answer" |> should equal 42
   result |> should equal expected
 
+[<Fact>]
+let ``Can use partial templates`` () =
+  let partial = """partial-test: {{ text }}
+"""
+
+  let document = """
+%% partial partial_test { text = "foo" }
+%% partial partial_test { text = "bar" }
+"""
+
+  let expected = """
+partial-test: foo
+partial-test: bar
+"""
+
+  let template = Template.loadString "test" document
+  let partial  = Template.loadString "partial_test" partial
+  let ctx' =
+    ctx |> TemplateContext.addPartial "partial_test" partial
+  let result = template |> Template.renderToString ctx'
+  result |> should equal expected

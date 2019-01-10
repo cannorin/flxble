@@ -2,11 +2,22 @@ namespace Flxble.Templating
 
 open System.Text
 open SyntaxTree
+open FParsec
 
 type TemplateContext = Context.TemplateContext
 type Template = SyntaxTree.Template
 type ScriptObject = SyntaxTree.ScriptObject
-module ScriptExpr = SyntaxTree.ScriptExpr
+
+exception TemplateParseFailed of msg:string
+  with
+    override this.Message = this.msg
+
+module internal Utils =
+  let inline internal unwrapParseResult x =
+    match x with
+      | Success (r, _, _) -> r
+      | Failure (msg, _, _) -> TemplateParseFailed msg |> raise
+open Utils
 
 module TemplateContext =
   /// Creates a new `TemplateContext` with the `culture` and a function
@@ -35,20 +46,9 @@ module TemplateContext =
   let inline addPartials partials ctx =
     { ctx with partials = Map.append ctx.partials partials }
 
-
-exception TemplateParseFailed of msg:string
-  with
-    override this.Message = this.msg
-
 module Template =
   open ScriptExpr
   open System.IO
-  open FParsec
-
-  let inline private unwrapParseResult x =
-    match x with
-      | Success (r, _, _) -> r
-      | Failure (msg, _, _) -> TemplateParseFailed msg |> raise
 
   /// Loads a template from the specified `path` with `encoding`.
   let loadFile encoding path =
@@ -156,3 +156,12 @@ module Template =
     use writer = new StringWriter(sb)
     render context writer script
     sb.ToString()
+
+type ScriptExpr = SyntaxTree.ScriptExpr
+type ScriptExprWithInfo = SyntaxTree.ScriptExprWithInfo
+module ScriptExpr =
+  let parse str : ScriptExprWithInfo =
+    runParserOnString Parser.exprInline () "N/A" str
+    |> unwrapParseResult
+  let inline eval (context: TemplateContext) (expr: ScriptExprWithInfo) =
+    ScriptExpr.eval context.bindings expr

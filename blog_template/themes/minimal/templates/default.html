@@ -1,0 +1,33 @@
+%% def title = \
+  if is_null title then config.title \
+  else title + " - " + config.title
+%% def description = description ?| config.description
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>
+    {{ title }}
+  </title>
+  <meta name="description" content="{{ string.html_escape description }}" />
+</head>
+
+%% def body_class = body_class ?| ""
+<body class="{{body_class}}">
+  <header class="default-header">
+    <a href="{{config.base_url}}/index.html">Home</a>
+    %% when is_not_null config.tag do
+      &nbsp;
+      <a href="{{config.base_url}}/{{config.tag}}/index.html">Tags</a>
+    %% end
+    %% when is_not_null config.archive do
+      &nbsp;
+      <a href="{{config.base_url}}/{{config.archive}}/index.html">Archive</a>
+    %% end
+  </header>
+  {{content}}
+
+</body>
+
+</html>

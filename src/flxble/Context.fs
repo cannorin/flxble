@@ -149,30 +149,7 @@ let inline tryOperation ctx name target body =
       FlxbleException(ctx, name, target, inner) |> raise
 
 module Context =
-  // get a PageInfo from the path.
-  let private getPageInfo sourceDir (absolutePath: string) (ctx: Context) =
-    tryOperation ctx "addFile" absolutePath <| fun () ->
-      let absPath = Path.GetFullPath absolutePath
-      let content = File.ReadAllText absPath
-      let (metadata, content) = PageMetaData.tryExtract content
-      let relativePath =
-        absPath |> Path.makeRelativeTo sourceDir
-      let pageFormat =
-        match Path.GetExtension absPath with
-          | ".md" | ".markdown" -> PageFormat.Markdown
-          | ".htm" | ".html" -> PageFormat.Html
-          | _ -> PageFormat.Other
-      {
-        relativeLocation = relativePath
-        absoluteLocation = absPath
-        format   = pageFormat
-        metadata = metadata
-        content  = content
-        scriptObjectMap = ValueNone
-        index = ValueNone
-      }
-
-  let inline private sortPagesAndCache ctx =
+  let inline internal sortPagesAndCache ctx =
     let pages =
       ctx.pages 
         |> Array.sortByDescending (
@@ -184,76 +161,64 @@ module Context =
         |> Array.mapi (fun i page -> { page with index = ValueSome i })
     { ctx with pages = pages }
 
-  let inline private clearCache ctx = { ctx with cache = ValueNone }
-  
+  let inline internal clearCache ctx = { ctx with cache = ValueNone }
+
+  /// adds all files found in the `sourceDir` to the current context.
+  let addPages sourceDir ctx =
+    let pages =
+      Directory.enumerateFilesRecursively false sourceDir
+      |> Seq.map (PageInfo.load sourceDir)
+      |> Seq.toArray
+    { ctx with pages = Array.append ctx.pages pages }
+
+  /// adds all templates found in the `templatesDir` to the current context.
+  let addTemplates templatesDir ctx =
+    let mp =
+      Directory.enumerateFilesRecursively false templatesDir
+      |> Seq.map TemplateInfo.load
+    let newMap =
+      Map.append (Map.ofSeq mp) ctx.templates
+    { ctx with templates = newMap }
+
   /// adds all files found in the source directory to the current context.
-  let private addAllSourceFiles (ctx: Context) =
-    tryOperation ctx "addAllSourceFiles" ctx.SourceDir <| fun () ->
+  let internal loadSource (ctx: Context) =
+    let ctx =
       if Directory.Exists ctx.SourceDir |> not then
         ctx.logger.warning "the specified source directory '%s' does not exist in '%s'"
           ctx.config.SourceDir
           ctx.SourceDir
         ctx
       else
-        let pages =
-          Directory.enumerateFilesRecursively false ctx.SourceDir
-          |> Seq.map (fun file -> getPageInfo ctx.SourceDir file ctx)
-          |> Seq.toArray
-        { ctx with pages = Array.append ctx.pages pages }
+        tryOperation ctx "loadSource_Pages" ctx.SourceDir <| fun () ->
+          addPages ctx.SourceDir ctx
+    
+    let templatesDir = Path.combine ctx.ConfigDir "templates"
+    if Directory.Exists templatesDir then
+      tryOperation ctx "loadSource_Templates" templatesDir <| fun () ->
+        addTemplates templatesDir ctx
+    else ctx
   
-  /// get a TemplateInfo from the path.
-  let private getTemplateInfo (path: string) ctx =
-    tryOperation ctx "addTemplate" path <| fun () ->
-      let absPath = Path.GetFullPath path
-      let toml, template =
-        let encoding = Text.Encoding.UTF8
-        Template.loadFileWithTomlMetadata encoding absPath
-      let metadata = toml |> Option.map PageMetaData
-      let dependency =
-        metadata |> Option.map (fun md -> md.PageType)
-      let name = Path.GetFileNameWithoutExtension absPath
-      name, {
-        name = name
-        dependsOn = dependency |> ValueOption.ofOption
-        metadata = metadata |> ValueOption.ofOption
-        template = template
-        scriptObjectMap = ValueNone
-      }
-
   /// loads the theme to the current context.
-  let private loadTheme (ctx: Context) =
+  let internal loadTheme (ctx: Context) =
     let themeFolder =
       Path.combineMany [|
         ctx.ConfigDir;
         ctx.config.ThemesDir; ctx.config.Theme |]
     
     let ctx =
-      tryOperation ctx "loadThemeTemplates" themeFolder <| fun () ->
+      tryOperation ctx "loadTheme_Templates" themeFolder <| fun () ->
         if Directory.Exists themeFolder |> not then
           ctx.logger.fail "the specified theme '%s' does not exist in '%s'"
             ctx.config.Theme ctx.config.ThemesDir
         let templatesDir =
-          Path.Combine(themeFolder, "templates")
-        if Directory.Exists templatesDir |> not then
-          ctx.logger.warning "the 'templates' directory of theme '%s' is empty"
-            ctx.config.Theme
-          ctx
-        else
-          let mp =
-            Directory.enumerateFilesRecursively false templatesDir
-            |> Seq.map (fun file -> getTemplateInfo file ctx)
-          let newMap =
-            Map.append (Map.ofSeq mp) ctx.templates
-          { ctx with templates = newMap }
+          Path.combine themeFolder "templates"
+        if Directory.Exists templatesDir |> not then ctx
+        else addTemplates templatesDir ctx
 
-    tryOperation ctx "loadThemeSource" themeFolder <| fun () ->
-      let sourceDir = Path.Combine(themeFolder, "src")
+    tryOperation ctx "loadTheme_Pages" themeFolder <| fun () ->
+      let sourceDir = Path.combine themeFolder "src" 
       if Directory.Exists sourceDir then
-        let pages =
-          Directory.enumerateFilesRecursively false sourceDir
-          |> Seq.map (fun file -> getPageInfo sourceDir file ctx)
-          |> Seq.toArray
-        { ctx with pages = Array.append ctx.pages pages }
+        addPages sourceDir ctx
       else ctx
   
   /// creates a new context from the given configuration file and (optionally) a logger.
@@ -293,7 +258,7 @@ module Context =
         templates = Map.empty
         logger = logger
         cache = ValueNone
-      } |> loadTheme |> addAllSourceFiles |> sortPagesAndCache |> clearCache
+      } |> loadTheme |> loadSource |> sortPagesAndCache |> clearCache
     with
       | ( :? DirectoryNotFoundException
         | :? FileLoadException

@@ -1,0 +1,29 @@
+---
+  type  = "default"
+  title = "Tags"
+---
+
+<main id="content" class="content" role="main">
+  <article class="post">
+      <header class="post-header">
+        <h1 class="post-title">Tags</h1>
+      </header>
+      <section class="post-content">
+        <p>
+          %% when is_not_null tags && array.length tags > 0 do
+          %% for tag in tags |> array.indexed do
+            %% when tag.index <> 0 do
+            ,
+            %% end
+            %% when is_not_null config.tag do
+              <a href="{{config.base_url}}/{{config.tag}}/{{tag.item}}.html">{{tag.item}}</a>
+            %% otherwise
+              <span class="tag-name">{{tag.item}}</span>
+            %% end
+          %% end
+          %% end
+        </p>
+      </section>
+  </article>
+</main>
+

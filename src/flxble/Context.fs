@@ -237,7 +237,7 @@ module Context =
                 match
                   Path.GetFileNameWithoutExtension file,
                   Path.GetExtension file with
-                  | "flex", ".toml" -> true
+                  | "flxble", ".toml" -> true
                   | _ -> false
               )
             |> Option.map Path.GetFullPath
@@ -247,8 +247,8 @@ module Context =
                     (fun msg ->
                       FileNotFoundException(
                         msg,
-                        Path.Combine(Environment.CurrentDirectory, "flex.toml")))
-                    "flex config file not found in the current directory.")
+                        Path.Combine(Environment.CurrentDirectory, "flxble.toml")))
+                    "flxble config file not found in the current directory.")
       let content = File.ReadAllText location
       let blogConf = BlogConfig(content)
       {
@@ -263,5 +263,5 @@ module Context =
       | ( :? DirectoryNotFoundException
         | :? FileLoadException
         | :? FileNotFoundException) & ex ->
-        logger.error "problem loading flex.toml: %s" ex.Message
+        logger.error "problem loading flxble.toml: %s" ex.Message
         reraise' ex

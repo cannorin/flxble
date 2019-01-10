@@ -64,9 +64,7 @@ let private generatePipeline ctx =
       |> customize
       |> fun x -> x.Build()
 
-let inline internal renderPage templateCtx pipeline (page: PageInfo) =
-  let pageVariables = page.ToScriptObjectMap()
-  let renderCtx = templateCtx |> TemplateContext.addMany pageVariables
+let inline internal renderPage renderCtx pipeline (page: PageInfo) =
   match page.format with
     | PageFormat.Markdown ->
       Markdown.ToHtml(page.content, pipeline)
@@ -85,6 +83,8 @@ let private renderPageToOutput ctx templateCtx pipeline page =
 
         ctx.logger.trace "generating '%s'..." path
 
+        let pageVariables = page.ToScriptObjectMap()
+
         let prevnextObjs = [|
           match page.metadata with
             | ValueNone -> ()
@@ -101,7 +101,8 @@ let private renderPageToOutput ctx templateCtx pipeline page =
         |]
 
         let renderCtx = 
-          templateCtx |> TemplateContext.addMany (Map.ofArray prevnextObjs)
+          templateCtx |> TemplateContext.addMany pageVariables
+                      |> TemplateContext.addMany (Map.ofArray prevnextObjs)
 
         let content = renderPage renderCtx pipeline page
 

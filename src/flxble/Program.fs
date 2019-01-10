@@ -146,6 +146,8 @@ let renderFile args =
   for file in files do
     let outPath = Path.combine outDir file.relativeLocation
     logger |> Option.iter (fun l -> l.trace "generating '%s'..." outPath)
+    let pageVariables = file.ToScriptObjectMap()
+    let tmpCtx = tmpCtx |> TemplateContext.addMany pageVariables
     let content =
       let content = Render.renderPage tmpCtx pipeline file
       match template with

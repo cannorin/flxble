@@ -201,7 +201,10 @@ FakesAssemblies/
 .vscode/
 .ionide/
 
+.fake
+.paket
 output/
 example_post*.md
 output.mlpd
 report*.txt
+*.lock

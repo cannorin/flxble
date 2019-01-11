@@ -1,4 +1,4 @@
-module Flxble.Main
+﻿module Flxble.Main
 open Flxble
 open Flxble.Context
 open Flxble.Templating
@@ -37,56 +37,11 @@ global options:
   --log-to-file [file]      .. output log to [file] or, if not specified, a randomly generated file in the temp directory.
 """
 
-let inline copt name argName = commandOption {
-  names name
-  takes (format("%s").withNames[argName])
-}
-
-let genLogFileName() =
-  let fn = Path.GetRandomFileName()
-  let now = DateTime.Now
-  Path.combine
-    (Path.GetTempPath())
-    (sprintf "flxble_%i%02i%02i_%02i%02i_%s"
-      now.Year now.Month now.Day now.Hour now.Minute
-      (Path.ChangeExtension(fn, ".log")))
-
-let getLogger args =
-  if args |> List.exists (fun s -> String.startsWith "--l" s || String.startsWith "-l" s) |> not then
-    None, args
-  else
-    let loglvlOpt = copt ["log-level"; "l"] "trace|info|warn|error"
-    let logfileOpt =
-      commandOption {
-        names ["log-to-file"]
-        takes (format("%s").withNames["file"])
-        defaultValue ""
-      } |> CommandOption.map (
-        Option.map (fun s -> if String.IsNullOrWhiteSpace s then genLogFileName() else s))
-    let loglvl, args = CommandOption.parse loglvlOpt args
-    let logfile, args = CommandOption.parse logfileOpt args
-    let logger =
-      match loglvl, logfile with
-        | None, None -> None
-        | None, Some file -> Logger.create(new StreamWriter(file)) |> Some
-        | Some "trace", _ ->
-          Some { 
-            level = LogLevel.Trace;
-            writer = logfile |> Option.map (fun s -> new StreamWriter(s) :> TextWriter) }
-        | Some "info", _ ->
-          Some { 
-            level = LogLevel.Info;
-            writer = logfile |> Option.map (fun s -> new StreamWriter(s) :> TextWriter) }
-        | Some "warning", _ ->
-          Some { 
-            level = LogLevel.Warning;
-            writer = logfile |> Option.map (fun s -> new StreamWriter(s) :> TextWriter) }
-        | Some "error", _ ->
-          Some { 
-            level = LogLevel.Error;
-            writer = logfile |> Option.map (fun s -> new StreamWriter(s) :> TextWriter) }
-        | Some invalid, _ -> failwithf "invalid log level: %s" invalid
-    logger, args
+let initBlog args =
+  let outputOpt = copt ["output"; "o"] "dir"
+  let outDir, _ = CommandOption.parse outputOpt args
+  let outDir = outDir ?| Environment.CurrentDirectory
+  extractTemplateZip outDir
 
 let newPage args =
   let typeOpt = copt ["type"; "t"] "name"
@@ -94,7 +49,7 @@ let newPage args =
   let _, args = getLogger args
 
   match args with
-    | path :: [] ->
+    | [path] ->
       let now = DateTimeOffset.Now.ToString("o")
       let metadata = sprintf "---
 type = '%s'
@@ -109,7 +64,7 @@ tags = []
     | _ ->
       failwithf "'flxble new-page' takes 1 argument but given %i." args.Length
   
-let inline renderBlog args =
+let renderBlog args =
   if args |> List.isEmpty then
     let ctx = Context.load None None
     Render.everything ctx
@@ -135,7 +90,7 @@ let renderFile args =
   let template = template |> Option.map (Models.TemplateInfo.load)
 
   let tmpCtx =
-    let tmpCtx =TemplateContext.create CultureInfo.InvariantCulture (sprintf "<!-- %s -->")
+    let tmpCtx = TemplateContext.create CultureInfo.InvariantCulture (sprintf "<!-- %s -->")
     tmpCtx |> TemplateContext.addMany
       (defs
         |> List.map (Tuple.map2 id (ScriptExpr.parse >> (ScriptExpr.eval tmpCtx)))
@@ -164,5 +119,6 @@ let main argv =
     | "render-blog" :: args -> renderBlog args; 0
     | "render-file" :: args -> renderFile args; 0
     | "new-page"    :: args -> newPage args; 0
+    | "init-blog"   :: args -> initBlog args; 0
     | unknown :: _ -> cprintfn ConsoleColor.Red "error: unknown command '%s'." unknown; -1
     | [] -> printfn "%s" helpText; 0

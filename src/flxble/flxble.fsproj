@@ -1,13 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>netcoreapp2.2; net472</TargetFrameworks>
-    <OutputPath>../../bin/$(Configuration)</OutputPath>
+    <TargetFrameworks Condition=" '$(Configuration)' == 'Debug' ">netcoreapp2.2; net472</TargetFrameworks>
+    <TargetFramework  Condition=" '$(Configuration)' != 'Debug' ">netcoreapp2.2</TargetFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.2' ">
     <Product>flxble</Product>
     <Description>Fast Lightweight eXtensible BLog Engine</Description>
-    <VersionPrefix>1.0.0</VersionPrefix>
 
     <Copyright>Apache 2</Copyright>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
@@ -16,7 +15,7 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     
     <IsPackable>true</IsPackable>
-    <!-- <PackAsTool>true</PackAsTool> -->
+    <PackAsTool Condition=" '$(TargetFramework)' == 'netcoreapp2.2' ">true</PackAsTool>
     <ToolCommandName>flxble</ToolCommandName>
   </PropertyGroup>
   <ItemGroup>
@@ -25,16 +24,22 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../common/prelude.fs" />
+    <Compile Include="../common/Version.fs" />
+    <Content Include="../blog_template.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Compile Include="Logger.fs" />
     <Compile Include="Configuration.fs" />
     <Compile Include="Models.fs" />
     <Compile Include="Context.fs" />
     <Compile Include="Render.fs" />
+    <Compile Include="Utils.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.CommandLine" Version="3.1.3294.2201" />
+    <PackageReference Include="Goblinfactory.ProgressBar" Version="0.4.0" />
     <PackageReference Include="Markdig" Version="0.15.5" />
-    <PackageReference Include="Scriban" Version="1.2.7" />
+    <PackageReference Include="System.IO.Compression" Version="4.3.0" />
   </ItemGroup>
 </Project>

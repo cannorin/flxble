@@ -77,6 +77,35 @@ Target.create "Build" (fun _ ->
     }))
 )
 
+Target.create "Publish" (fun _ ->
+  let publish runtime =
+    DotNet.publish (fun opt ->
+      { opt with
+          Common = opt.Common |> DotNet.Options.withAdditionalArgs ["--self-contained=true"]
+          Runtime = Some runtime
+          Configuration = DotNet.BuildConfiguration.Release
+          MSBuildParams = {
+            opt.MSBuildParams with
+              Properties =
+                ("PackAsTool", "false") :: opt.MSBuildParams.Properties
+          }
+          OutputPath = Some <| sprintf "../../bin/publish/%s" runtime
+      }
+    ) "src/flxble/flxble.fsproj"
+  let runtimes = [
+    "win-x64"
+    "linux-x64"
+    "linux-arm"
+    "osx-x64"
+  ]
+  for runtime in runtimes do
+    publish runtime
+    let deployPath = sprintf "./bin/publish/%s" runtime
+    Trace.tracefn "---> %s" (sprintf "%s.zip" deployPath)
+    Zip.zip deployPath (sprintf "%s.zip" deployPath) <|
+      !!(sprintf "%s/**/*" deployPath)
+)
+
 Target.create "Pack" (fun _ ->
   !! "src/**/*.*proj"
   |> Seq.iter (fun proj -> proj |> DotNet.pack (fun opt ->
@@ -96,10 +125,9 @@ Target.create "Pack" (fun _ ->
 Target.create "All" ignore
 
 "Clean"
-  ==> "WriteVersion"
   ==> "ZipBlogTemplate"
-  ==> "Build"
   ==> "Pack"
+  ==> "Publish"
   ==> "All"
 
 Target.runOrDefault "All"

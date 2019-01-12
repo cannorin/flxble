@@ -1,7 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFrameworks>netstandard2.0;netstandard1.6</TargetFrameworks>
+    <Product>Flxble.Toml</Product>
+    <Description>TOML parsing library.</Description>
+    <Authors>cannorin</Authors>
+    <Copyright>(c) cannorin 2018-2019</Copyright>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/cannorin/flxble</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageTags>fsharp toml parser</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

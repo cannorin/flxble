@@ -173,14 +173,22 @@ module String =
 
   let inline substring startIndex endIndex (str: string) = str.Substring(startIndex, endIndex)
 
-  let inline normalize (nfo: NormalizationForm option) (str: string) = 
-    match nfo with Some nf -> str.Normalize nf | None -> str.Normalize()
+#if !NETSTANDARD1_6
+  let inline normalize (str: string) = str.Normalize()
+  
+  let inline normalizeWithForm (nf: NormalizationForm) (str: string) = 
+    str.Normalize nf
 
   let inline toLower (ci: CultureInfo) (str: string) = str.ToLower ci
 
-  let inline toLowerInvariant (str: string) = str.ToLowerInvariant()
-
   let inline toUpper (ci: CultureInfo) (str: string) = str.ToUpper ci
+#else
+  let inline toLower (ci: CultureInfo) (str: string) = ci.TextInfo.ToLower str
+
+  let inline toUpper (ci: CultureInfo) (str: string) = ci.TextInfo.ToUpper str
+#endif
+
+  let inline toLowerInvariant (str: string) = str.ToLowerInvariant()
 
   let inline toUpperInvariant (str: string) = str.ToUpperInvariant()
 
@@ -218,6 +226,12 @@ module String =
 
   let inline splitSeq (sp: ^T seq) (s: ^String) =
     (^String: (member Split: ^T array -> StringSplitOptions -> ^String array) (s, Seq.toArray sp, StringSplitOptions.None))
+
+  let inline splitSkipEmpty (sp: ^T) (s: ^String) =
+    (^String: (member Split: ^T array -> StringSplitOptions -> ^String array) (s, [|sp|], StringSplitOptions.RemoveEmptyEntries))
+
+  let inline splitSeqSkipEmpty (sp: ^T seq) (s: ^String) =
+    (^String: (member Split: ^T array -> StringSplitOptions -> ^String array) (s, Seq.toArray sp, StringSplitOptions.RemoveEmptyEntries))
 
   let inline removeEmptyEntries (sp: string array) = sp |> Array.filter (String.IsNullOrEmpty >> not)
 
@@ -270,150 +284,6 @@ module StringExtensions =
 
     member inline this.printfn format =
       Printf.kprintf (fun s -> this.AppendLine s |> ignore) format
-
-// from: Collections.fs
-open System.Collections.Generic
-
-type array2d<'t> = 't[,]
-type array3d<'t> = 't[,,]    
-
-module List =
-  let inline splitWith predicate xs =
-    List.foldBack (fun x state ->
-      if predicate x then
-        [] :: state
-      else
-        match state with
-        | [] -> [[x]]
-        | h :: t -> (x :: h) :: t
-    ) xs []
-
-  let inline split separator xs = splitWith ((=) separator) xs
-
-  let inline tryTake length xs =
-    if List.length xs >= length then
-      List.take length xs |> Some
-    else None
-
-  let inline skipSafe length xs =
-    if List.length xs > length then
-      List.skip length xs
-    else List.empty
-
-  let inline foldi folder state xs =
-    List.fold (fun (i, state) x -> (i + 1, folder i state x)) (0, state) xs |> snd
-
-module Seq =
-  let inline splitWith predicate xs =
-    let i = ref 1
-    xs |> Seq.groupBy (fun x -> if predicate x then incr i; 0 else !i)
-       |> Seq.filter (fst >> ((<>) 0))
-       |> Seq.map snd
-  
-  let inline split separator xs = splitWith ((=) separator) xs
-
-  let inline skipSafe length xs = 
-    xs |> Seq.indexed
-       |> Seq.skipWhile (fst >> ((>) length))
-       |> Seq.map snd
-
-  let inline tryTake length xs =
-    let xs' = xs |> Seq.indexed |> Seq.cache
-    if xs' |> Seq.exists (fst >> ((=) (length - 1))) then
-      xs' |> Seq.take length |> Seq.map snd |> Some
-    else None
-  
-  let inline foldi folder state xs =
-    Seq.fold (fun (i, state) x -> (i + 1, folder i state x)) (0, state) xs |> snd
-
-module Array =
-  let inline skipSafe length xs =
-    if Array.length xs > length then
-      Array.skip length xs
-    else Array.empty
-
-  let inline tryTake length xs =
-    if Array.length xs > length then
-      Array.take length xs |> Some
-    else if Array.length xs = length then Some xs
-    else None
-
-  let inline foldi folder state xs =
-    Array.fold (fun (i, state) x -> (i + 1, folder i state x)) (0, state) xs |> snd
-
-module Map =
-  open FSharp.Collections
-  let inline choose c m =
-    m |> Map.fold (
-      fun newMap k v ->
-        match c k v with
-          | Some x -> newMap |> Map.add k x
-          | None   -> newMap
-    ) Map.empty
-
-  /// Appends two maps. If there is a duplicate key,
-  /// the value in the latter map (`m2`) will be used.
-  let inline append m1 m2 =
-    Map.fold (fun m k v -> Map.add k v m) m1 m2
-
-  /// Concats multiple maps. If there is a duplicate key,
-  /// the value in the last map containing that key will be used.
-  let inline concat ms =
-    ms |> Seq.fold (fun state m -> append state m) Map.empty
-
-  /// Merges two maps. If there is a duplicate key, the `merger` function
-  /// will be called: the first parameter is the key, the second is the value
-  /// found in the formar map `m1`, and the third is the one found in `m2`.
-  let inline merge merger m1 m2 =
-    Map.fold (fun m k v1 -> 
-      match m |> Map.tryFind k with
-        | Some v2 -> Map.add k (merger k v1 v2) m
-        | None -> Map.add k v1 m
-      ) m1 m2
-  
-  /// Merges multiple maps. If there is a duplicate key, the `merger` function
-  /// will be called: the first parameter is the key, the second is the value
-  /// already found in the earlier maps, and the third is the value newly found.
-  let inline mergeMany merger ms =
-    ms |> Seq.fold (fun state m -> merge merger state m) Map.empty
-
-type dict<'a, 'b> = IDictionary<'a, 'b>
-
-module Dict =
-  let inline empty<'a, 'b when 'a: comparison> = Map.empty :> dict<'a, 'b>
-  let inline map f (d: #dict<_, _>) =
-    dict <| seq {
-      for KVP(k, v) in d do
-        yield k, f k v
-    }
-  let inline filter p (d: #dict<_, _>) =
-    dict <| seq {
-      for KVP(k, v) in d do
-        if p k v then yield k,v
-    }
-  let inline choose c (d: #dict<_, _>) =
-    dict <| seq {
-      for KVP(k, v) in d do
-        match c k v with
-          | Some x -> yield k, x
-          | None -> ()
-    }
-  let inline fold f init (d: #dict<_, _>) =
-    Seq.fold (fun state (KVP(k, v)) -> f state k v) init d
-  let inline count (xs: #dict<_, _>) = xs.Count
-  let inline exists pred (xs: #dict<_, _>) =
-    xs :> seq<_> |> Seq.exists (function KVP(k, v) -> pred k v)
-  let inline containsKey x (xs: #dict<_, _>) = xs.ContainsKey x
-  let inline find key (xs: #dict<_, _>) = xs.[key]
-  let inline tryFind key (xs: #dict<_, _>) =
-    if xs.ContainsKey key then xs.[key] |> Some else None
-  let inline toMap (xs: #dict<_, _>) =
-    let mutable m = Map.empty
-    for KVP(k, v) in xs do
-      m <- m |> Map.add k v
-    m
-  let inline toMutable (xs: #dict<'a, 'b>) = new Dictionary<'a, 'b>(xs :> IDictionary<_, _>)
-  let inline toSeq (xs: #dict<_, _>) = xs :> seq<kvp<_, _>>
 
 // from: DataTypes.fs
 module Lazy =
@@ -490,7 +360,7 @@ module Async =
   let inline returnValue x = async { return x }
   let inline bind f m = async { let! x = m in return! f x }
 
-  let timeout (timeout : TimeSpan) a =
+  let inline timeout (timeout : TimeSpan) a =
     async {
       try
         let! child = Async.StartChild(a, int timeout.TotalMilliseconds) in
@@ -499,6 +369,209 @@ module Async =
       with
         | :? TimeoutException -> return None
     }
+
+// from: Collections.fs
+open System.Collections.Generic
+
+type array2d<'t> = 't[,]
+type array3d<'t> = 't[,,]    
+
+module List =
+  let inline splitWith predicate xs =
+    List.foldBack (fun x state ->
+      if predicate x then
+        [] :: state
+      else
+        match state with
+        | [] -> [[x]]
+        | h :: t -> (x :: h) :: t
+    ) xs []
+
+  let inline split separator xs = splitWith ((=) separator) xs
+
+  let inline splitWhile condition xs =
+    let mutable b = true
+    List.partition (fun x -> if b && condition x then true else b <- false; false) xs
+
+  let inline tryTake length xs =
+    if List.length xs >= length then
+      List.take length xs |> Some
+    else None
+
+  let inline skipSafe length xs =
+    if List.length xs > length then
+      List.skip length xs
+    else List.empty
+
+  let inline tryFold folder state xs =
+    List.fold (fun state x -> match state with Some s -> folder s x | None -> None) (Some state) xs
+
+  let inline foldWhile condition folder state xs =
+    List.fold
+      (fun (cond, state) x -> if cond && condition x then true, folder state x else false, state)
+      (true, state)
+      xs
+    |> snd
+
+  let inline foldi folder state xs =
+    List.fold (fun (i, state) x -> (i + 1, folder i state x)) (0, state) xs |> snd
+
+  let inline mapFoldi folder state xs =
+    List.mapFold
+      (fun (i, state) x -> let result, state = folder i state x in result, (i+1, state))
+      (0, state)
+      xs
+    |> Tuple.map2 id snd
+
+module Seq =
+  let inline splitWith predicate xs =
+    let i = ref 1
+    xs |> Seq.groupBy (fun x -> if predicate x then incr i; 0 else !i)
+       |> Seq.filter (fst >> ((<>) 0))
+       |> Seq.map snd
+  
+  let inline split separator xs = splitWith ((=) separator) xs
+
+  let inline splitWhile condition xs =
+    let xs = Seq.cache xs
+    Seq.takeWhile condition xs, Seq.skipWhile condition xs
+
+  let inline skipSafe length xs = 
+    xs |> Seq.indexed
+       |> Seq.skipWhile (fst >> ((>) length))
+       |> Seq.map snd
+
+  let inline tryTake length xs =
+    let xs' = xs |> Seq.indexed |> Seq.cache
+    if xs' |> Seq.exists (fst >> ((=) (length - 1))) then
+      xs' |> Seq.take length |> Seq.map snd |> Some
+    else None
+ 
+  let inline tryFold folder state xs =
+    Seq.fold (fun state x -> match state with Some s -> folder s x | None -> None) (Some state) xs
+
+  let inline foldWhile condition folder state xs =
+    Seq.fold
+      (fun (cond, state) x -> if cond && condition x then true, folder state x else false, state)
+      (true, state)
+      xs
+    |> snd
+ 
+  let inline foldi folder state xs =
+    Seq.fold (fun (i, state) x -> (i + 1, folder i state x)) (0, state) xs |> snd
+
+  let inline mapFoldi folder state xs =
+    Seq.mapFold
+      (fun (i, state) x -> let result, state = folder i state x in result, (i+1, state))
+      (0, state)
+      xs
+    |> Tuple.map2 id snd
+
+module Array =
+  let inline skipSafe length xs =
+    if Array.length xs > length then
+      Array.skip length xs
+    else Array.empty
+
+  let inline tryTake length xs =
+    if Array.length xs > length then
+      Array.take length xs |> Some
+    else if Array.length xs = length then Some xs
+    else None
+
+  let inline tryFold folder state xs =
+    Array.fold (fun state x -> match state with Some s -> folder s x | None -> None) (Some state) xs
+
+  let inline foldWhile condition folder state xs =
+    Array.fold
+      (fun (cond, state) x -> if cond && condition x then true, folder state x else false, state)
+      (true, state)
+      xs
+    |> snd
+
+  let inline foldi folder state xs =
+    Array.fold (fun (i, state) x -> (i + 1, folder i state x)) (0, state) xs |> snd
+
+  let inline mapFoldi folder state xs =
+    Array.mapFold
+      (fun (i, state) x -> let result, state = folder i state x in result, (i+1, state))
+      (0, state)
+      xs
+    |> Tuple.map2 id snd
+
+module Map =
+  open FSharp.Collections
+  let inline choose c m =
+    m |> Map.fold (
+      fun newMap k v ->
+        match c k v with
+          | Some x -> newMap |> Map.add k x
+          | None   -> newMap
+    ) Map.empty
+
+  /// Appends two maps. If there is a duplicate key,
+  /// the value in the latter map (`m2`) will be used.
+  let inline append m1 m2 =
+    Map.fold (fun m k v -> Map.add k v m) m1 m2
+
+  /// Concats multiple maps. If there is a duplicate key,
+  /// the value in the last map containing that key will be used.
+  let inline concat ms =
+    ms |> Seq.fold (fun state m -> append state m) Map.empty
+
+  /// Merges two maps. If there is a duplicate key, the `merger` function
+  /// will be called: the first parameter is the key, the second is the value
+  /// found in the formar map `m1`, and the third is the one found in `m2`.
+  let inline merge merger m1 m2 =
+    Map.fold (fun m k v1 -> 
+      match m |> Map.tryFind k with
+        | Some v2 -> Map.add k (merger k v1 v2) m
+        | None -> Map.add k v1 m
+      ) m1 m2
+  
+  /// Merges multiple maps. If there is a duplicate key, the `merger` function
+  /// will be called: the first parameter is the key, the second is the value
+  /// already found in the earlier maps, and the third is the value newly found.
+  let inline mergeMany merger ms =
+    ms |> Seq.fold (fun state m -> merge merger state m) Map.empty
+
+type dict<'a, 'b> = IDictionary<'a, 'b>
+
+module Dict =
+  let inline empty<'a, 'b when 'a: comparison> = Map.empty :> dict<'a, 'b>
+  let inline map f (d: #dict<_, _>) =
+    dict <| seq {
+      for KVP(k, v) in d do
+        yield k, f k v
+    }
+  let inline filter p (d: #dict<_, _>) =
+    dict <| seq {
+      for KVP(k, v) in d do
+        if p k v then yield k,v
+    }
+  let inline choose c (d: #dict<_, _>) =
+    dict <| seq {
+      for KVP(k, v) in d do
+        match c k v with
+          | Some x -> yield k, x
+          | None -> ()
+    }
+  let inline fold f init (d: #dict<_, _>) =
+    Seq.fold (fun state (KVP(k, v)) -> f state k v) init d
+  let inline count (xs: #dict<_, _>) = xs.Count
+  let inline exists pred (xs: #dict<_, _>) =
+    xs :> seq<_> |> Seq.exists (function KVP(k, v) -> pred k v)
+  let inline containsKey x (xs: #dict<_, _>) = xs.ContainsKey x
+  let inline find key (xs: #dict<_, _>) = xs.[key]
+  let inline tryFind key (xs: #dict<_, _>) =
+    if xs.ContainsKey key then xs.[key] |> Some else None
+  let inline toMap (xs: #dict<_, _>) =
+    let mutable m = Map.empty
+    for KVP(k, v) in xs do
+      m <- m |> Map.add k v
+    m
+  let inline toMutable (xs: #dict<'a, 'b>) = new Dictionary<'a, 'b>(xs :> IDictionary<_, _>)
+  let inline toSeq (xs: #dict<_, _>) = xs :> seq<kvp<_, _>>
 
 // from: ValueOption.fs
 module ValueOption =
@@ -740,6 +813,7 @@ module ComputationExpressions =
 
     member inline this.Delay f = f
     member inline this.Undelay f = f()
+    member inline this.Run f = f()
     member inline this.TryWith (f, h) = try f() with exn -> h exn
     member inline this.TryFinally (f, h) = try f() finally h()
     
@@ -775,6 +849,7 @@ module ComputationExpressions =
     
     member inline this.Delay f = f
     member inline this.Undelay f = f()
+    member inline this.Run f = f()
     member inline this.TryWith (f, h) = try f() with exn -> h exn
     member inline this.TryFinally (f, h) = try f() finally h()
 
@@ -806,6 +881,7 @@ module ComputationExpressions =
     
     member inline this.Delay f = f
     member inline this.Undelay f = f()
+    member inline this.Run f = f()
     member inline this.TryWith (f, h) = try f() with exn -> h exn
     member inline this.TryFinally (f, h) = try f() finally h()
     
@@ -884,11 +960,11 @@ open System.IO
 
 module Path =
 
-  let combine x y = Path.Combine(x, y)
+  let inline combine x y = Path.Combine(x, y)
 
-  let combineMany xs = Path.Combine <| Seq.toArray xs
+  let inline combineMany xs = Path.Combine <| Seq.toArray xs
 
-  let makeRelativeTo parentDir file =
+  let inline makeRelativeTo parentDir file =
     let filePath = new Uri(file)
     let path =
       new Uri (
@@ -910,15 +986,17 @@ module Directory =
   let inline isHidden dir =
     DirectoryInfo(dir).Attributes.HasFlag(FileAttributes.Hidden)
   
-  let rec enumerateFilesRecursively includeHidden dir =
-    seq {
-      for x in Directory.EnumerateFiles dir do
-        if includeHidden || not (File.isHidden x) then
-          yield x
-      for subdir in Directory.EnumerateDirectories dir do
-        if includeHidden || not (isHidden subdir) then
-          yield! enumerateFilesRecursively includeHidden subdir
-    }
+  let inline enumerateFilesRecursively includeHidden dir =
+    let rec enumRec dir =
+      seq {
+        for x in Directory.EnumerateFiles dir do
+          if includeHidden || not (File.isHidden x) then
+            yield x
+        for subdir in Directory.EnumerateDirectories dir do
+          if includeHidden || not (isHidden subdir) then
+            yield! enumRec subdir
+      }
+    enumRec dir
 
 // from: Task.fs
 open System.Threading.Tasks
@@ -987,6 +1065,7 @@ module Convert =
     digits |> Seq.foldi (fun i sum x ->
       sum + (int x - int '0') * pown 10 (len - i)) 0
 
+#if !NETSTANDARD1_6
 module Shell =
   open System.Diagnostics
 
@@ -1065,4 +1144,5 @@ module Shell =
       do p.WaitForExit() 
       return p.ExitCode
     }
+#endif
 

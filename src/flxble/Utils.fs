@@ -6,7 +6,6 @@ open System.IO.Compression
 open System.Net
 open System.Reflection
 open FSharp.CommandLine
-open Konsole
 
 let genLogFileName() =
   let fn = Path.GetRandomFileName()
@@ -65,10 +64,8 @@ let templateZipUrl = "https://github.com/cannorin/flxble/raw/master/src/blog_tem
 let extractTemplateZip outDir =
   async {
     use wc = new WebClient()
-    let progress = new ProgressBarSlim(100)
     use zipStream =
       try
-        wc.DownloadProgressChanged.Add(fun e -> progress.Refresh(e.ProgressPercentage, templateZipUrl))
         wc.OpenRead(templateZipUrl)
       with
         | _ ->

@@ -3,19 +3,19 @@
     <OutputType>Exe</OutputType>
     <TargetFrameworks Condition=" '$(Configuration)' == 'Debug' ">netcoreapp2.2; net472</TargetFrameworks>
     <TargetFramework  Condition=" '$(Configuration)' != 'Debug' ">netcoreapp2.2</TargetFramework>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.2' ">
     <Product>flxble</Product>
     <Description>Fast Lightweight eXtensible BLog Engine</Description>
-
-    <Copyright>Apache 2</Copyright>
+    <Authors>cannorin</Authors>
+    <Copyright>(c) cannorin 2018-2019</Copyright>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageLicenseUrl>https://github.com/cannorin/flxble/blob/master/LICENSE.txt</PackageLicenseUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/cannorin/flxble</PackageProjectUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    
+    <PackageTags>fsharp blog engine static site generator</PackageTags>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.2' ">
     <IsPackable>true</IsPackable>
-    <PackAsTool Condition=" '$(TargetFramework)' == 'netcoreapp2.2' ">true</PackAsTool>
+    <PackAsTool>true</PackAsTool>
     <ToolCommandName>flxble</ToolCommandName>
   </PropertyGroup>
   <ItemGroup>
@@ -38,7 +38,6 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.CommandLine" Version="3.1.3294.2201" />
-    <PackageReference Include="Goblinfactory.ProgressBar" Version="0.4.0" />
     <PackageReference Include="Markdig" Version="0.15.5" />
     <PackageReference Include="System.IO.Compression" Version="4.3.0" />
   </ItemGroup>

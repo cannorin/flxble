@@ -399,7 +399,12 @@ let inline defaultBindings (culture: CultureInfo) =
         | xs -> err 2 "insert_at" xs
       )
       yield "length", fn 1 (function [String s] -> String.length s |> Int | xs -> err 1 "length" xs)
-      yield s1 (String.normalize None) "normalize" String
+
+#if !NETSTANDARD1_6
+      yield s1 String.normalize "normalize" String
+#else
+      yield s1 (fun (s: string) -> s.Normalize()) "normalize" String
+#endif
 
       yield padby String.padLeftBy "pad_left"
       yield padby String.padRightBy "pad_right"

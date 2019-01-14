@@ -148,6 +148,7 @@ type Rendering() =
     TemplateContext.create
       invariantCulture 
       (sprintf "<!-- %s -->")
+
   let scribanCtx =
     let ctx = Scriban.TemplateContext()
     ctx.PushCulture invariantCulture
@@ -194,10 +195,103 @@ type Rendering() =
     cottleStore.[implicit "products"] <- Cottle.Values.ReflectionValue products
     cottle.Render(cottleStore)
 
+[<MemoryDiagnoser>]
+type All() =
+  let parsers = new Parsing()
+  let flxble = parsers.Flxble()
+  let scriban = parsers.Scriban()
+  let dotLiquid = parsers.DotLiquid()
+  let stubble = parsers.Stubble()
+  let cottle = parsers.Cottle()
+  let products = [|
+    for i = 1 to 500 do
+      yield new Product(sprintf "Product %i" i, float i, lorem)
+  |]
+  let dotLiquidProducts = ResizeArray()
+  let cottleProducts = ResizeArray()
+  do
+    for product in products do
+      dotLiquidProducts.Add <|
+        DotLiquid.Hash.FromAnonymousObject product
+      cottleProducts.Add <|
+        new Cottle.Values.ReflectionValue(product)
+  let flxbleProducts =
+    products |> Array.map (fun x -> x.ToScriptObject()) |> ScriptObject.Array
+
+  let cottleStringStore =
+    dict [
+      Cottle.Value.op_Implicit("string"),
+      Cottle.Functions.NativeFunction((fun values ->
+        if values.Count <> 2 then
+          failwith "truncate expects 2 arguments"
+        Scriban.Functions.StringFunctions.Truncate(
+          values.[0].AsString,
+          values.[1].AsNumber |> int
+        ) |> Cottle.Value.op_Implicit),2)
+        |> Cottle.Value.op_Implicit
+    ] |> System.Collections.Generic.Dictionary
+
+  let invariantCulture = System.Globalization.CultureInfo.InvariantCulture
+
+  let flxbleCtx =
+    TemplateContext.create
+      invariantCulture 
+      (sprintf "<!-- %s -->")
+
+  let scribanCtx =
+    let ctx = Scriban.TemplateContext()
+    ctx.PushCulture invariantCulture
+    ctx
+
+  [<Benchmark(Description="parsing+rendering: Flxble")>]
+  member __.Flxble() =
+    let flxble = parsers.Flxble()
+    let ctx = flxbleCtx |> TemplateContext.add "products" flxbleProducts
+    Template.renderToString ctx flxble
+
+  [<Benchmark(Description="parsing+rendering: Scriban")>]
+  member __.Scriban() =
+    let scriban = parsers.Scriban()
+    let obj = Scriban.Runtime.ScriptObject()
+    obj.Add("products", products)
+    scribanCtx.PushGlobal(obj)
+    let result = scriban.Render(scribanCtx)
+    scribanCtx.PopGlobal() |> ignore
+    result
+
+  [<Benchmark(Description="parsing+rendering: DotLiquid")>]
+  member __.DotLiquid() =
+    let dotLiquid = parsers.DotLiquid()
+    dotLiquid.Render(DotLiquid.Hash.FromDictionary <| dict ["products", box dotLiquidProducts])
+  
+  [<Benchmark(Description="parsing+rendering: Stubble")>]
+  member __.Stubble() =
+    let renderer = Stubble.Core.StubbleVisitorRenderer()
+    let props = new System.Collections.Generic.Dictionary<string, obj>()
+    props.["products"] <- box dotLiquidProducts
+    let mutable i = 0
+    props.["truncate"] <-
+      box <|
+        System.Func<string, obj>(fun str ->
+          let j = i
+          i <- i+1
+          box <|
+            Scriban.Functions.StringFunctions.Truncate(
+              renderer.Render(str, dotLiquidProducts.[j]), 15))
+    renderer.Render(tmpMustache, props)
+  
+  [<Benchmark(Description="parsing+rendering: Cottle")>]
+  member __.Cottle() =
+    let cottle = parsers.Cottle()
+    let cottleStore = Cottle.Stores.BuiltinStore()
+    cottleStore.[implicit "string"] <- implicit cottleStringStore
+    cottleStore.[implicit "products"] <- Cottle.Values.ReflectionValue products
+    cottle.Render(cottleStore)
+
 [<EntryPoint>]
 let main argv =
   let switcher =
-    BenchmarkSwitcher.FromTypes [| typeof<Parsing>; typeof<Rendering> |]
-  switcher.RunAllJoined()
+    BenchmarkSwitcher.FromTypes [| typeof<Parsing>; typeof<Rendering>; typeof<All> |]
+  switcher.RunAllJoined() |> ignore
   0
 

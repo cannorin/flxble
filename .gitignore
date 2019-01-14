@@ -208,3 +208,4 @@ example_post*.md
 output.mlpd
 report*.txt
 *.lock
+BenchmarkDotNet.Artifacts/

@@ -35,7 +35,7 @@ let opvar = cyn '`' >>. many1Satisfy ((<>) '`') .>> cyn '`'
 let inline addinfo parser =
   parser |> location |>> fun (x, loc) -> x |> With.info { location = loc }
 
-let inline prepareOpp (sc: #sc<_>) op_chars op_reserved op2Handler =
+let inline prepareOpp (sc: sc<_>) op_chars op_reserved op2Handler =
   let opp = new OperatorPrecedenceParser<'t, string, unit>()
   opp.OperatorConflictErrorFormatter <-
     fun (pos1, op1, afterString1) (pos2, op2, afterString2) ->
@@ -62,7 +62,7 @@ let inline prepareOpp (sc: #sc<_>) op_chars op_reserved op2Handler =
   
   (opp, addOp2Ext, addOp2Res)
 
-let inline expr (sc: #sc<_>) = recursive <| fun expr ->
+let inline private expr' (sc: sc<_>) = recursive <| fun expr ->
   let inline ws x = sc.ws x
   let inline spaces x = sc.spaces x
   let inline spaces1 x = sc.spaces1 x
@@ -215,16 +215,21 @@ let inline expr (sc: #sc<_>) = recursive <| fun expr ->
 
   opp.ExpressionParser
 
-let exprBlock = expr (DefaultSpaceCombinators())
+let exprBlock  = expr' SpaceCombinators.Default
+let exprInline = expr' SpaceCombinators.LineSplicing
 
-let exprInline = expr (LineSplicingSpaceCombinators())
+let private expr (sc: sc<_>) =
+  match sc with
+    | :? DefaultSpaceCombinators<_> -> exprBlock
+    | :? LineSplicingSpaceCombinators<_> -> exprInline
+    | _ -> failwith "impossible"
 
 let template : parser<Template> = recursive <| fun statements ->
-  let inline openClause (sc: #sc<_>) =
+  let inline openClause (sc: sc<_>) =
     sc.ws (syn "open") >>. expr sc
     |>> Open
 
-  let inline defineClause (sc: #sc<_>) =
+  let inline defineClause (sc: sc<_>) =
     tuple2
       (sc.ws (syn "def") >>. sc.ws name .>>. sepEndBy name sc.spaces1)
       (sc.ws (cyn '=')   >>. expr sc)
@@ -234,15 +239,15 @@ let template : parser<Template> = recursive <| fun statements ->
       | Item ((name, args), expr) as x ->
         Define (name, Lambda (args, expr) |> With.sameInfoOf x)
 
-  let inline partialClause (sc: #sc<_>) =
+  let inline partialClause (sc: sc<_>) =
     sc.ws (syn "partial") >>. sc.ws name .>>. expr sc
     |>> Partial
 
 
-  let inline whenClause (sc: #sc<_>) =
+  let inline whenClause (sc: sc<_>) =
     sc.ws (syn "when") >>. sc.ws (expr sc) .>> syn "do"
 
-  let inline forClause (sc: #sc<_>) =
+  let inline forClause (sc: sc<_>) =
     tuple2
       (sc.ws (syn "for") >>. sc.ws name)
       (sc.ws (syn "in")  >>. sc.ws (expr sc) .>> syn "do")
@@ -257,19 +262,17 @@ let template : parser<Template> = recursive <| fun statements ->
     whitespaces
     >>? syn "%%"
     >>. whitespaces
-    >>? clause (LineSplicingSpaceCombinators() :> sc<_>)
+    >>? clause SpaceCombinators.LineSplicing
     .>> whitespaces
     .>> skipRestOfLine true
 
   /// {% CLAUSE %}
   let inline asBlock clause =
-    (
-      syn "{%"
-      >>. spaces
-      >>? clause (DefaultSpaceCombinators() :> sc<_>)
-      .>> spaces
-      .>> syn "%}"
-    ) <?> "{% ... %}"
+    syn "{%"
+    >>. spaces
+    >>? clause SpaceCombinators.LineSplicing
+    .>> spaces
+    .>> syn "%}"
 
   let inline clause name clauseParser =
         (asLine clauseParser <?> sprintf "%%%% %s" name)
@@ -298,7 +301,7 @@ let template : parser<Template> = recursive <| fun statements ->
 
   /// {{ EXPR }}
   let yieldObject =
-    embeddedBlock "{{" "}}" (spaces >>. expr (DefaultSpaceCombinators()) .>> spaces)
+    embeddedBlock "{{" "}}" (spaces >>. expr SpaceCombinators.LineSplicing .>> spaces)
     |>> YieldObject
 
   /// ANY_OTHER_STRING
@@ -310,7 +313,7 @@ let template : parser<Template> = recursive <| fun statements ->
 
   let stmts =
     notFollowedBy (clause "end" endClause <|> clause "otherwise" otherwiseClause)
-    >>. choice [
+    >>. choiceL [
       clause "open <record>" openClause
       clause "def <variable> = <expr>" defineClause
       clause "partial <name> <expr>" partialClause
@@ -320,7 +323,7 @@ let template : parser<Template> = recursive <| fun statements ->
       yieldObject
       newlineReturn <| YieldText "\n"
       yieldText
-    ] <?> "%% <statement> | {% <statement> %} | {{ <expr> }} | <raw text>"
+    ] "%% <statement> | {% <statement> %} | {{ <expr> }} | <raw text>"
   
   many stmts
 

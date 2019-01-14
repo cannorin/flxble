@@ -63,6 +63,9 @@ let inline whitespaces<'a> : Parser<unit, 'a> =
 let inline whitespaces1<'a> : Parser<unit, 'a> =
   skipMany1SatisfyL (fun c -> c = ' ' || c = '\t') "whitespace"
 
+let inline private lineSplicingSpace<'a> : Parser<unit, 'a> =
+  skipSatisfy (fun c -> c = ' ' || c = '\t') <|> (cyn '\\' >>. skipNewline)
+
 type ISpaceCombinatorsProvider<'a> =
   abstract member spaces:  Parser<unit, 'a>
   abstract member spaces1: Parser<unit, 'a>
@@ -84,19 +87,21 @@ type InlineSpaceCombinators<'a> =
     member __.spaces1   = whitespaces1
     member __.ws parser = parser .>> whitespaces
 
-let inline private lineSplicingSpace() =
-  skipSatisfy (fun c -> c = ' ' || c = '\t') <|> (cyn '\\' >>. skipNewline)
-
 /// skips over any sequence of whitespaces or backslash-newline ( "\\\\\n" ).
 [<Struct>]
 type LineSplicingSpaceCombinators<'a> =
   interface ISpaceCombinatorsProvider<'a> with
     member __.spaces =
-      skipMany <| lineSplicingSpace()
+      skipMany lineSplicingSpace
     member __.spaces1 =
-      skipMany1 <| lineSplicingSpace()
+      skipMany1 lineSplicingSpace
     member __.ws parser =
-      parser .>> skipMany (lineSplicingSpace())
+      parser .>> skipMany lineSplicingSpace
+
+module SpaceCombinators =
+  let Default<'a>      = DefaultSpaceCombinators<'a>()
+  let Inline<'a>       = InlineSpaceCombinators<'a>()
+  let LineSplicing<'a> = LineSplicingSpaceCombinators<'a>()
 
 /// short hand for `x .>> spaces`
 let inline ws x = x .>> spaces

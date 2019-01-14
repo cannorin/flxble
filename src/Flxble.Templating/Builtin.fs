@@ -440,6 +440,13 @@ let inline defaultBindings (culture: CultureInfo) =
       yield s2 String.trimBySeq "trim_by" String
       yield s2 String.trimStartBySeq "trim_start_by" String
       yield s2 String.trimEndBySeq "trim_end_by" String
+
+      yield "truncate", fn 3 (function
+        | [Int length; String ellipsis; String str] ->
+          let str = str |> String.take (length - String.length ellipsis)
+          str + ellipsis |> String
+        | xs -> err 3 "truncate" xs
+      )
       
       yield s1 String.IsNullOrEmpty "is_empty" Bool
       yield s1 String.IsNullOrWhiteSpace "is_whitespace" Bool

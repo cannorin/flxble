@@ -198,11 +198,6 @@ type Rendering() =
 [<MemoryDiagnoser>]
 type All() =
   let parsers = new Parsing()
-  let flxble = parsers.Flxble()
-  let scriban = parsers.Scriban()
-  let dotLiquid = parsers.DotLiquid()
-  let stubble = parsers.Stubble()
-  let cottle = parsers.Cottle()
   let products = [|
     for i = 1 to 500 do
       yield new Product(sprintf "Product %i" i, float i, lorem)

@@ -228,17 +228,35 @@ let inline defaultBindings (culture: CultureInfo) =
       | xs -> err 2 "<<" xs
     )
 
-    yield "timespan", fn 1 (function
-      | [Record r] ->
-        new TimeSpan(
-          toInt r.["day"],
-          toInt r.["hour"],
-          toInt r.["minute"],
-          toInt r.["second"],
-          toInt r.["millisecond"]
-        ) |> TimeSpan
-      | xs -> err 1 "timespan" xs
-    )
+    // timespan module
+    yield "timespan", record <| seq {
+      yield "new", fn 1 (function
+        | [Record r] ->
+          new TimeSpan(
+            toInt r.["day"],
+            toInt r.["hour"],
+            toInt r.["minute"],
+            toInt r.["second"],
+            toInt r.["millisecond"]
+          ) |> TimeSpan
+        | xs -> err 1 "timespan" xs
+      )
+      yield "from_ticks", fn 1 (function
+        | [Int i] ->
+          TimeSpan.FromTicks(int64 i) |> TimeSpan
+        | xs -> err 1 "from_ticks" xs
+      )
+      yield "parse", fn 1 (function
+        | [String s] ->
+          TimeSpan.Parse(s, culture.DateTimeFormat) |> TimeSpan
+        | xs -> err 1 "parse" xs
+      )
+      yield "parse_invariant", fn 1 (function
+        | [String s] ->
+          TimeSpan.Parse(s, CultureInfo.InvariantCulture.DateTimeFormat) |> TimeSpan
+        | xs -> err 1 "parse_invariant" xs
+      )
+    }
 
     // date module
     yield "date", record <| seq {
@@ -282,6 +300,10 @@ let inline defaultBindings (culture: CultureInfo) =
       yield "parse", fn 1 (function
         | [String s] -> DateTime.Parse(s, culture.DateTimeFormat) |> Date
         | xs -> err 1 "parse" xs
+      )
+      yield "parse_invariant", fn 1 (function
+        | [String s] -> DateTime.Parse(s, CultureInfo.InvariantCulture.DateTimeFormat) |> Date
+        | xs -> err 1 "parse_invariant" xs
       )
     }
 

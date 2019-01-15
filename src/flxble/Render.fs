@@ -182,7 +182,7 @@ let private renderTagArchive (ctx: Context) sobj =
     renderArchive "tag" "archive" ctx.Tags
       (fun tag x -> x.Tags |> List.contains tag)
       (sprintf "Tag: %s")
-      WebUtility.UrlEncode dir ctx sobj)
+      id dir ctx sobj)
   |> Option.defaultValue Seq.empty
 
 let private renderMonthlyArchive (ctx: Context) sobj =

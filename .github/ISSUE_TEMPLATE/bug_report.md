@@ -7,28 +7,33 @@ assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+### Description
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+Please provide a succinct description of your issue.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+### Repro steps
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+Please provide the steps required to reproduce the problem
 
-**Error message**
-If it reports some error message, paste it here (using a [fenced block](https://help.github.com/articles/creating-and-highlighting-code-blocks/)).
+1. Step A
 
-**Desktop (please complete the following information):**
- - OS: [e.g. Windows 10, Debian jessie]
- - Version [e.g. 22]
+2. Step B
 
-**Additional context**
-Add any other context about the problem here.
+### Expected behavior
+
+Please provide a description of the behavior you expect.
+
+### Actual behavior
+
+Please provide a description of the actual behavior you observe. 
+
+### Known workarounds
+
+Please provide a description of any known workarounds.
+
+### Related information 
+
+* Operating system
+* Branch
+* .NET Runtime, CoreCLR or Mono Version
+* Performance information, links to performance testing scripts

@@ -91,12 +91,12 @@ let private renderPageToOutput ctx templateCtx pipeline page =
             | ValueSome metadata ->
               let prev, next = ctx.FindPrevNextPost page
               match prev with
-                | ValueSome { metadata = ValueSome x } when x.PageType = metadata.PageType ->
-                  yield "prev_date_page", ScriptObject.from x
+                | ValueSome ({ metadata = ValueSome x } as m) when x.PageType = metadata.PageType ->
+                  yield "prev_date_page", ScriptObject.from m
                 | _ -> ()
               match next with
-                | ValueSome { metadata = ValueSome x } when x.PageType = metadata.PageType ->
-                  yield "next_date_page", ScriptObject.from x
+                | ValueSome ({ metadata = ValueSome x } as m) when x.PageType = metadata.PageType ->
+                  yield "next_date_page", ScriptObject.from m
                 | _ -> ()
         |]
 

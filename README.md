@@ -65,7 +65,7 @@ flxble supports decent theming. See the [minimal template](https://github.com/ca
 
 # Documentation
 
-TBD
+Under construction at [GitHub Wiki](https://github.com/cannorin/flxble/wiki). I need your help!!
 
 # License
 

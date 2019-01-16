@@ -17,11 +17,11 @@ Alternatvely, you can just download a standalone binary from [Releases](https://
 
 # How to use
 
-First, execute `flxble init-blog` and the empty blog will be created in the current directory.
+First of all, execute `flxble init-blog` and an empty blog will be created in the current directory.
 
 `flxble new-page src/blog/<any_name>.md` to create a new page.
 
-Finally, `flxble render-blog` to turn the articles into a blog.
+`flxble render-blog` to turn your articles into a blog.
 
 # Config file - `flxble.toml`
 

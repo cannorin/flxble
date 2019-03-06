@@ -99,7 +99,7 @@ let renderFile args =
   let pipeline = MarkdownPipelineBuilder().UseAdvancedExtensions().Build()
 
   for file in files do
-    let outPath = Path.combine outDir file.relativeLocation
+    let outPath = Path.ChangeExtension(file.relativeLocation, "html") |> Path.combine outDir
     logger |> Option.iter (fun l -> l.trace "generating '%s'..." outPath)
     let pageVariables = file.ToScriptObjectMap()
     let tmpCtx = tmpCtx |> TemplateContext.addMany pageVariables

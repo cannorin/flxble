@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks Condition=" '$(Configuration)' == 'Debug' ">netcoreapp2.2; net472</TargetFrameworks>
-    <TargetFramework  Condition=" '$(Configuration)' != 'Debug' ">netcoreapp2.2</TargetFramework>
+    <TargetFrameworks Condition=" '$(Configuration)' == 'Debug' ">netcoreapp2.1; net472</TargetFrameworks>
+    <TargetFramework  Condition=" '$(Configuration)' != 'Debug' ">netcoreapp2.1</TargetFramework>
     <Product>flxble</Product>
     <Description>Fast Lightweight eXtensible BLog Engine</Description>
     <Authors>cannorin</Authors>

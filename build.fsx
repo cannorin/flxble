@@ -1,6 +1,6 @@
 #r "paket:
 source https://api.nuget.org/v3/index.json
-nuget FSharp.Core
+nuget FSharp.Core 4.6
 nuget Fake.DotNet.Cli
 nuget Fake.IO.FileSystem
 nuget Fake.IO.Zip
@@ -17,6 +17,7 @@ open Fake.IO.FileSystemOperators
 open Fake.IO.Globbing.Operators
 open Fake.Core.TargetOperators
 open System.Text.RegularExpressions
+open System.IO
 
 type Date = System.DateTimeOffset
 
@@ -84,26 +85,31 @@ Target.create "Publish" (fun _ ->
           Common = opt.Common |> DotNet.Options.withAdditionalArgs ["--self-contained=true"]
           Runtime = Some runtime
           Configuration = DotNet.BuildConfiguration.Release
+          Framework = Some "netcoreapp3.0"
           MSBuildParams = {
             opt.MSBuildParams with
               Properties =
-                ("PackAsTool", "false") :: opt.MSBuildParams.Properties
+                ("PackAsTool", "false")
+                :: ("TargetFramework", "netcoreapp3.0")
+                :: ("PublishSingleFile", "true")
+                :: ("PublishTrimmed", "true")
+                :: opt.MSBuildParams.Properties
           }
-          OutputPath = Some <| sprintf "../../bin/publish/%s" runtime
+          OutputPath = Some <| sprintf "./bin/publish/%s" runtime
       }
     ) "src/flxble/flxble.fsproj"
   let runtimes = [
-    "win-x64"
-    "linux-x64"
-    "linux-arm"
-    "osx-x64"
+    "win-x64",   "flxble.exe", ""
+    "linux-x64", "flxble", "-linux-x64"
+    "linux-arm", "flxble", "-linux-arm"
+    "osx-x64",   "flxble", "-osx-x64"
   ]
-  for runtime in runtimes do
+  for (runtime, binName, binExt) in runtimes do
     publish runtime
     let deployPath = sprintf "./bin/publish/%s" runtime
-    Trace.tracefn "---> %s" (sprintf "%s.zip" deployPath)
-    Zip.zip deployPath (sprintf "%s.zip" deployPath) <|
-      !!(sprintf "%s/**/*" deployPath)
+    let binOutput = sprintf "%s%s" binName binExt
+    Trace.tracefn "---> %s" (sprintf "./bin/publish/%s" binOutput)
+    File.Copy(Path.combine deployPath binName, sprintf "./bin/publish/%s" binOutput, true)
 )
 
 Target.create "Pack" (fun _ ->
@@ -111,7 +117,7 @@ Target.create "Pack" (fun _ ->
   |> Seq.iter (fun proj -> proj |> DotNet.pack (fun opt ->
     { opt with
         Configuration = DotNet.BuildConfiguration.Release
-        OutputPath = Some "../../bin/packages/"
+        OutputPath = Some "./bin/packages/"
         MSBuildParams = {
           opt.MSBuildParams with
             Properties =
@@ -124,10 +130,7 @@ Target.create "Pack" (fun _ ->
 
 Target.create "All" ignore
 
-"Clean"
-  ==> "ZipBlogTemplate"
-  ==> "Pack"
-  ==> "Publish"
-  ==> "All"
+"Clean" ==> "ZipBlogTemplate" ==> "Pack" ==> "All"
+"ZipBlogTemplate" ==> "Publish" ==> "All"
 
 Target.runOrDefault "All"

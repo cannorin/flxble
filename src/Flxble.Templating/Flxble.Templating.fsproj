@@ -27,6 +27,7 @@
     <Compile Include="ScriptObject.Dsl.fs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.6.0" />
     <PackageReference Include="FParsec" Version="1.0.3" />
     <PackageReference Include="System.Globalization.Extensions" Version="4.3.0" />
   </ItemGroup>
